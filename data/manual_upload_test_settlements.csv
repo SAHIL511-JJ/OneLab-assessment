@@ -1,0 +1,6 @@
+reference_id,value_date,credit_amount,payout_batch_ref,bank_utr_no,bank_note,payout_status
+PAY1001,2025-03-26,980.00,BATCH-7001,UTR7001,March settlement,SETTLED
+PAY1002,2025-03-31,1455.48,BATCH-7002,UTR7002,Rounding adjustment,SETTLED
+PAY1003,2025-04-02,2360.00,BATCH-7003,UTR7003,Month-end settlement,SETTLED
+PAY1005,2025-04-01,4200.75,BATCH-7004,UTR7004,Month-end settlement,SETTLED
+PAY9999,2025-03-28,-250.00,BATCH-7999,UTR7999,Refund without source txn,SETTLED

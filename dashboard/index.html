@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Payment Reconciliation Tool — Match platform transactions against bank settlements and identify discrepancies.">
+    <meta name="description" content="Payment Reconciliation Tool - Match platform transactions against bank settlements and identify discrepancies.">
     <title>Payment Reconciliation Tool</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- ── Header ─────────────────────────────────────────── -->
     <header id="app-header">
         <div class="header-content">
             <div class="logo-area">
@@ -22,13 +21,12 @@
                 </div>
                 <div>
                     <h1>Payment Reconciliation</h1>
-                    <p class="subtitle">Match transactions · Find discrepancies · Balance the books</p>
+                    <p class="subtitle">Match transactions | Find discrepancies | Balance the books</p>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- ── Upload Section ─────────────────────────────────── -->
     <main id="app-main">
         <section id="upload-section" class="glass-card">
             <h2 class="section-title">
@@ -39,22 +37,90 @@
                 </svg>
                 Load Data
             </h2>
+
             <div class="upload-grid">
                 <div class="upload-zone" id="txn-upload-zone">
                     <input type="file" id="txn-file" accept=".csv" hidden>
-                    <div class="upload-icon">📄</div>
+                    <div class="upload-icon">TXN</div>
                     <p class="upload-label">Transactions CSV</p>
-                    <p class="upload-hint">Drag & drop or click to browse</p>
+                    <p class="upload-hint">Drag and drop or click to browse</p>
                     <p class="upload-status" id="txn-status"></p>
                 </div>
+
                 <div class="upload-zone" id="stl-upload-zone">
                     <input type="file" id="stl-file" accept=".csv" hidden>
-                    <div class="upload-icon">🏦</div>
+                    <div class="upload-icon">STL</div>
                     <p class="upload-label">Bank Settlements CSV</p>
-                    <p class="upload-hint">Drag & drop or click to browse</p>
+                    <p class="upload-hint">Drag and drop or click to browse</p>
                     <p class="upload-status" id="stl-status"></p>
                 </div>
             </div>
+
+            <section id="mapping-panel" class="mapping-panel hidden">
+                <div class="mapping-header">
+                    <div>
+                        <h3>Map Uploaded Columns</h3>
+                        <p>Uploaded files can use any column names. Confirm the required fields before running reconciliation.</p>
+                    </div>
+                    <span id="mapping-badge" class="mapping-badge">Waiting for files</span>
+                </div>
+
+                <div id="mapping-message" class="mapping-message hidden"></div>
+
+                <div class="mapping-grid">
+                    <div class="mapping-card">
+                        <div class="mapping-card-header">
+                            <h4>Transactions CSV</h4>
+                            <span id="txn-file-name" class="mapping-file-name"></span>
+                        </div>
+                        <div class="mapping-list">
+                            <label class="mapping-field">
+                                <span>Transaction ID</span>
+                                <select id="map-txn-transaction-id" class="mapping-select" data-dataset="txn" data-field="transaction_id"></select>
+                            </label>
+                            <label class="mapping-field">
+                                <span>Transaction Date</span>
+                                <select id="map-txn-transaction-date" class="mapping-select" data-dataset="txn" data-field="transaction_date"></select>
+                            </label>
+                            <label class="mapping-field">
+                                <span>Expected Amount / Net Amount</span>
+                                <select id="map-txn-expected-amount" class="mapping-select" data-dataset="txn" data-field="expected_amount"></select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mapping-card">
+                        <div class="mapping-card-header">
+                            <h4>Settlements CSV</h4>
+                            <span id="stl-file-name" class="mapping-file-name"></span>
+                        </div>
+                        <div class="mapping-list">
+                            <label class="mapping-field">
+                                <span>Transaction ID</span>
+                                <select id="map-stl-transaction-id" class="mapping-select" data-dataset="stl" data-field="transaction_id"></select>
+                            </label>
+                            <label class="mapping-field">
+                                <span>Settlement Date</span>
+                                <select id="map-stl-settlement-date" class="mapping-select" data-dataset="stl" data-field="settlement_date"></select>
+                            </label>
+                            <label class="mapping-field">
+                                <span>Settlement Amount</span>
+                                <select id="map-stl-settlement-amount" class="mapping-select" data-dataset="stl" data-field="settlement_amount"></select>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mapping-actions">
+                    <button id="btn-apply-mapping" class="btn btn-secondary" disabled>Apply Mapping</button>
+                </div>
+
+                <div id="validation-panel" class="validation-panel hidden">
+                    <h4>Preflight Check</h4>
+                    <ul id="validation-list" class="validation-list"></ul>
+                </div>
+            </section>
+
             <div class="upload-actions">
                 <button id="btn-sample" class="btn btn-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -72,39 +138,35 @@
             </div>
         </section>
 
-        <!-- ── Results Section (hidden until reconciliation runs) ── -->
         <section id="results-section" class="hidden">
-
-            <!-- Summary Cards -->
             <div class="summary-grid" id="summary-cards">
                 <div class="summary-card matched">
-                    <div class="card-icon">✅</div>
+                    <div class="card-icon">OK</div>
                     <div class="card-value" id="card-matched">0</div>
                     <div class="card-label">Matched</div>
                 </div>
                 <div class="summary-card cross-month">
-                    <div class="card-icon">📅</div>
+                    <div class="card-icon">CM</div>
                     <div class="card-value" id="card-cross-month">0</div>
                     <div class="card-label">Cross-Month</div>
                 </div>
                 <div class="summary-card mismatch">
-                    <div class="card-icon">💰</div>
+                    <div class="card-icon">MM</div>
                     <div class="card-value" id="card-mismatch">0</div>
                     <div class="card-label">Amount Mismatch</div>
                 </div>
                 <div class="summary-card duplicate">
-                    <div class="card-icon">📋</div>
+                    <div class="card-icon">DP</div>
                     <div class="card-value" id="card-duplicates">0</div>
                     <div class="card-label">Duplicates</div>
                 </div>
                 <div class="summary-card orphan">
-                    <div class="card-icon">🔄</div>
+                    <div class="card-icon">RF</div>
                     <div class="card-value" id="card-orphans">0</div>
                     <div class="card-label">Orphan Refunds</div>
                 </div>
             </div>
 
-            <!-- Tabs -->
             <div class="tabs-container glass-card">
                 <div class="tab-bar" id="tab-bar">
                     <button class="tab active" data-tab="all">All Transactions</button>
@@ -114,7 +176,6 @@
                     <button class="tab" data-tab="orphans">Orphan Refunds</button>
                 </div>
 
-                <!-- Search & Filter -->
                 <div class="table-controls">
                     <div class="search-box">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -125,7 +186,6 @@
                     </div>
                 </div>
 
-                <!-- Tab Panels -->
                 <div class="tab-panel active" id="panel-all">
                     <div class="table-wrapper">
                         <table id="table-all">
@@ -135,9 +195,9 @@
                                     <th data-sort="transaction_id">Transaction ID</th>
                                     <th data-sort="transaction_date">Txn Date</th>
                                     <th data-sort="settlement_date">Settlement Date</th>
-                                    <th data-sort="expected_amount">Expected (₹)</th>
-                                    <th data-sort="actual_amount">Actual (₹)</th>
-                                    <th data-sort="difference">Diff (₹)</th>
+                                    <th data-sort="expected_amount">Expected (&#8377;)</th>
+                                    <th data-sort="actual_amount">Actual (&#8377;)</th>
+                                    <th data-sort="difference">Diff (&#8377;)</th>
                                     <th data-sort="payment_method">Method</th>
                                     <th data-sort="merchant_id">Merchant</th>
                                 </tr>
@@ -149,7 +209,7 @@
 
                 <div class="tab-panel" id="panel-cross-month">
                     <div class="panel-description">
-                        <p>Transactions recorded in March but settled in a different month. These are <strong>not errors</strong> — they're timing differences due to bank settlement delays at month-end.</p>
+                        <p>Transactions recorded in one month but settled in another. These are timing differences, not necessarily reconciliation defects.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-cross-month">
@@ -158,9 +218,9 @@
                                     <th>Transaction ID</th>
                                     <th>Transaction Date</th>
                                     <th>Settlement Date</th>
-                                    <th>Expected (₹)</th>
-                                    <th>Actual (₹)</th>
-                                    <th>Diff (₹)</th>
+                                    <th>Expected (&#8377;)</th>
+                                    <th>Actual (&#8377;)</th>
+                                    <th>Diff (&#8377;)</th>
                                     <th>Method</th>
                                     <th>UTR</th>
                                 </tr>
@@ -172,16 +232,16 @@
 
                 <div class="tab-panel" id="panel-mismatch">
                     <div class="panel-description">
-                        <p>Transactions where the platform's computed <code>net_amount</code> differs from the bank's <code>settlement_amount</code>. Typically caused by floating-point rounding differences in fee/tax calculations.</p>
+                        <p>Rows where the expected platform amount differs from the bank settlement amount after column mapping and normalization.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-mismatch">
                             <thead>
                                 <tr>
                                     <th>Transaction ID</th>
-                                    <th>Expected (₹)</th>
-                                    <th>Actual (₹)</th>
-                                    <th>Difference (₹)</th>
+                                    <th>Expected (&#8377;)</th>
+                                    <th>Actual (&#8377;)</th>
+                                    <th>Difference (&#8377;)</th>
                                     <th>Transaction Date</th>
                                     <th>Method</th>
                                     <th>Merchant</th>
@@ -194,7 +254,7 @@
 
                 <div class="tab-panel" id="panel-duplicates">
                     <div class="panel-description">
-                        <p>Entries appearing more than once in a dataset. Usually caused by system retries or processing glitches.</p>
+                        <p>Entries that appear more than once in a dataset, usually due to retries or repeated exports.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-duplicates">
@@ -204,7 +264,7 @@
                                     <th>Occurrences</th>
                                     <th>Dataset</th>
                                     <th>Order ID</th>
-                                    <th>Amount (₹)</th>
+                                    <th>Amount (&#8377;)</th>
                                     <th>Method</th>
                                 </tr>
                             </thead>
@@ -215,7 +275,7 @@
 
                 <div class="tab-panel" id="panel-orphans">
                     <div class="panel-description">
-                        <p>Bank settlements referencing transaction IDs that don't exist in the platform records. Often refunds processed against transactions not in the current dataset.</p>
+                        <p>Settlement rows referencing transaction IDs that do not exist in the uploaded transactions file.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-orphans">
@@ -223,7 +283,7 @@
                                 <tr>
                                     <th>Settlement ID</th>
                                     <th>Transaction ID (Missing)</th>
-                                    <th>Amount (₹)</th>
+                                    <th>Amount (&#8377;)</th>
                                     <th>Settlement Date</th>
                                     <th>UTR</th>
                                     <th>Bank Reference</th>
@@ -235,7 +295,6 @@
                 </div>
             </div>
 
-            <!-- Assumptions -->
             <section class="glass-card assumptions-card">
                 <h2 class="section-title">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -246,24 +305,21 @@
                     Stated Assumptions
                 </h2>
                 <ol class="assumptions-list">
-                    <li>All transactions are in <strong>INR</strong></li>
-                    <li>Bank settles <strong>1–2 business days</strong> after transaction</li>
-                    <li>Platform fee = <strong>2% of amount</strong>, Tax = <strong>18% GST</strong> on fee</li>
-                    <li>Reconciliation period: <strong>March 2025</strong></li>
-                    <li><code>transaction_id</code> is the <strong>primary matching key</strong> across datasets</li>
-                    <li><code>net_amount = amount - fee - tax</code> should equal bank's <code>settlement_amount</code></li>
-                    <li>Refunds appear as <strong>negative amounts</strong> in bank settlements</li>
-                    <li>Duplicates can occur on either side due to <strong>system retries</strong></li>
+                    <li>All transactions are in <strong>INR</strong>.</li>
+                    <li>Bank settles <strong>1-2 business days</strong> after the original transaction.</li>
+                    <li>Expected amount should represent the platform's net receivable for reconciliation.</li>
+                    <li>Reconciliation uses <code>transaction_id</code> as the primary join key across the two files.</li>
+                    <li>Refunds can appear as <strong>negative settlement amounts</strong>.</li>
+                    <li>Duplicates can exist on either side because of retries, repeated exports, or operational mistakes.</li>
                 </ol>
             </section>
         </section>
     </main>
 
     <footer id="app-footer">
-        <p>Payment Reconciliation Tool — OneLab AI Readiness Assessment</p>
+        <p>Payment Reconciliation Tool - OneLab AI Readiness Assessment</p>
     </footer>
 
-    <!-- PapaParse for CSV parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="app.js"></script>
 </body>
