@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Payment Reconciliation Tool — Match platform transactions against bank settlements and identify discrepancies.">
+    <title>Payment Reconciliation Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ── Header ─────────────────────────────────────────── -->
+    <header id="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <polyline points="9 12 11 14 15 10"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Payment Reconciliation</h1>
+                    <p class="subtitle">Match transactions · Find discrepancies · Balance the books</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Upload Section ─────────────────────────────────── -->
+    <main id="app-main">
+        <section id="upload-section" class="glass-card">
+            <h2 class="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Load Data
+            </h2>
+            <div class="upload-grid">
+                <div class="upload-zone" id="txn-upload-zone">
+                    <input type="file" id="txn-file" accept=".csv" hidden>
+                    <div class="upload-icon">📄</div>
+                    <p class="upload-label">Transactions CSV</p>
+                    <p class="upload-hint">Drag & drop or click to browse</p>
+                    <p class="upload-status" id="txn-status"></p>
+                </div>
+                <div class="upload-zone" id="stl-upload-zone">
+                    <input type="file" id="stl-file" accept=".csv" hidden>
+                    <div class="upload-icon">🏦</div>
+                    <p class="upload-label">Bank Settlements CSV</p>
+                    <p class="upload-hint">Drag & drop or click to browse</p>
+                    <p class="upload-status" id="stl-status"></p>
+                </div>
+            </div>
+            <div class="upload-actions">
+                <button id="btn-sample" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    Use Sample Data
+                </button>
+                <button id="btn-reconcile" class="btn btn-primary" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    Run Reconciliation
+                </button>
+            </div>
+        </section>
+
+        <!-- ── Results Section (hidden until reconciliation runs) ── -->
+        <section id="results-section" class="hidden">
+
+            <!-- Summary Cards -->
+            <div class="summary-grid" id="summary-cards">
+                <div class="summary-card matched">
+                    <div class="card-icon">✅</div>
+                    <div class="card-value" id="card-matched">0</div>
+                    <div class="card-label">Matched</div>
+                </div>
+                <div class="summary-card cross-month">
+                    <div class="card-icon">📅</div>
+                    <div class="card-value" id="card-cross-month">0</div>
+                    <div class="card-label">Cross-Month</div>
+                </div>
+                <div class="summary-card mismatch">
+                    <div class="card-icon">💰</div>
+                    <div class="card-value" id="card-mismatch">0</div>
+                    <div class="card-label">Amount Mismatch</div>
+                </div>
+                <div class="summary-card duplicate">
+                    <div class="card-icon">📋</div>
+                    <div class="card-value" id="card-duplicates">0</div>
+                    <div class="card-label">Duplicates</div>
+                </div>
+                <div class="summary-card orphan">
+                    <div class="card-icon">🔄</div>
+                    <div class="card-value" id="card-orphans">0</div>
+                    <div class="card-label">Orphan Refunds</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs-container glass-card">
+                <div class="tab-bar" id="tab-bar">
+                    <button class="tab active" data-tab="all">All Transactions</button>
+                    <button class="tab" data-tab="cross-month">Cross-Month</button>
+                    <button class="tab" data-tab="mismatch">Amount Mismatch</button>
+                    <button class="tab" data-tab="duplicates">Duplicates</button>
+                    <button class="tab" data-tab="orphans">Orphan Refunds</button>
+                </div>
+
+                <!-- Search & Filter -->
+                <div class="table-controls">
+                    <div class="search-box">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="search-input" placeholder="Search by Transaction ID, Order ID, or Merchant...">
+                    </div>
+                </div>
+
+                <!-- Tab Panels -->
+                <div class="tab-panel active" id="panel-all">
+                    <div class="table-wrapper">
+                        <table id="table-all">
+                            <thead>
+                                <tr>
+                                    <th data-sort="status">Status</th>
+                                    <th data-sort="transaction_id">Transaction ID</th>
+                                    <th data-sort="transaction_date">Txn Date</th>
+                                    <th data-sort="settlement_date">Settlement Date</th>
+                                    <th data-sort="expected_amount">Expected (₹)</th>
+                                    <th data-sort="actual_amount">Actual (₹)</th>
+                                    <th data-sort="difference">Diff (₹)</th>
+                                    <th data-sort="payment_method">Method</th>
+                                    <th data-sort="merchant_id">Merchant</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="panel-cross-month">
+                    <div class="panel-description">
+                        <p>Transactions recorded in March but settled in a different month. These are <strong>not errors</strong> — they're timing differences due to bank settlement delays at month-end.</p>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="table-cross-month">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Transaction Date</th>
+                                    <th>Settlement Date</th>
+                                    <th>Expected (₹)</th>
+                                    <th>Actual (₹)</th>
+                                    <th>Diff (₹)</th>
+                                    <th>Method</th>
+                                    <th>UTR</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="panel-mismatch">
+                    <div class="panel-description">
+                        <p>Transactions where the platform's computed <code>net_amount</code> differs from the bank's <code>settlement_amount</code>. Typically caused by floating-point rounding differences in fee/tax calculations.</p>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="table-mismatch">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Expected (₹)</th>
+                                    <th>Actual (₹)</th>
+                                    <th>Difference (₹)</th>
+                                    <th>Transaction Date</th>
+                                    <th>Method</th>
+                                    <th>Merchant</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="panel-duplicates">
+                    <div class="panel-description">
+                        <p>Entries appearing more than once in a dataset. Usually caused by system retries or processing glitches.</p>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="table-duplicates">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Occurrences</th>
+                                    <th>Dataset</th>
+                                    <th>Order ID</th>
+                                    <th>Amount (₹)</th>
+                                    <th>Method</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="tab-panel" id="panel-orphans">
+                    <div class="panel-description">
+                        <p>Bank settlements referencing transaction IDs that don't exist in the platform records. Often refunds processed against transactions not in the current dataset.</p>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="table-orphans">
+                            <thead>
+                                <tr>
+                                    <th>Settlement ID</th>
+                                    <th>Transaction ID (Missing)</th>
+                                    <th>Amount (₹)</th>
+                                    <th>Settlement Date</th>
+                                    <th>UTR</th>
+                                    <th>Bank Reference</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assumptions -->
+            <section class="glass-card assumptions-card">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    Stated Assumptions
+                </h2>
+                <ol class="assumptions-list">
+                    <li>All transactions are in <strong>INR</strong></li>
+                    <li>Bank settles <strong>1–2 business days</strong> after transaction</li>
+                    <li>Platform fee = <strong>2% of amount</strong>, Tax = <strong>18% GST</strong> on fee</li>
+                    <li>Reconciliation period: <strong>March 2025</strong></li>
+                    <li><code>transaction_id</code> is the <strong>primary matching key</strong> across datasets</li>
+                    <li><code>net_amount = amount - fee - tax</code> should equal bank's <code>settlement_amount</code></li>
+                    <li>Refunds appear as <strong>negative amounts</strong> in bank settlements</li>
+                    <li>Duplicates can occur on either side due to <strong>system retries</strong></li>
+                </ol>
+            </section>
+        </section>
+    </main>
+
+    <footer id="app-footer">
+        <p>Payment Reconciliation Tool — OneLab AI Readiness Assessment</p>
+    </footer>
+
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
