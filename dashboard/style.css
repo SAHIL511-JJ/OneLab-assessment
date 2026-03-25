@@ -313,6 +313,17 @@ body::before {
     margin: var(--space-2) 0 0 1.1rem;
 }
 
+.mapping-note {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
 .mapping-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -370,6 +381,15 @@ body::before {
     padding: 0.72rem 0.8rem;
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
+}
+
+.mapping-select option {
+    background: #171726;
+    color: var(--text-primary);
+}
+
+.mapping-select option[value=""] {
+    color: var(--text-muted);
 }
 
 .mapping-select:focus {
