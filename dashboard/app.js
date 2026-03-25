@@ -3,8 +3,8 @@
  * Payment Reconciliation Dashboard - upload-safe client-side engine.
  */
 
-const SAMPLE_TXN_URL = '../data/transactions.csv';
-const SAMPLE_STL_URL = '../data/bank_settlements.csv';
+const SAMPLE_TXN_URL = './data/transactions.csv';
+const SAMPLE_STL_URL = './data/bank_settlements.csv';
 
 const REQUIRED_FIELDS = {
     txn: [
