@@ -2,7 +2,7 @@
 Synthetic Data Generator for Payment Reconciliation Assessment
 Generates transactions.csv and bank_settlements.csv with 4 planted gap types:
   1. Cross-month settlement (March transactions settled in April)
-  2. Rounding differences (floating-point fee/tax rounding)
+  2. Rounding differences visible only in aggregate totals
   3. Duplicate entries (system retry duplicates in transactions)
   4. Orphan refunds (bank refunds with no matching transaction)
 """
@@ -19,6 +19,7 @@ NUM_NORMAL_TRANSACTIONS = 300
 RECONCILIATION_MONTH = 3  # March 2025
 RECONCILIATION_YEAR = 2025
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "data"
+ROUNDING_DRIFT_PER_ROW = 0.01
 
 PAYMENT_METHODS = ["UPI", "Credit Card", "Debit Card", "NetBanking", "Wallet"]
 PAYMENT_METHOD_WEIGHTS = [40, 25, 15, 12, 8]  # realistic distribution
@@ -195,9 +196,9 @@ def generate():
         }
         settlements.append(stl)
 
-    # ── 3. Plant Gap Type 2: Rounding Differences ──────────────────
-    # 5 transactions with amounts designed to cause fee/tax rounding issues
-    # Bank uses a slightly different rounding method at batch level
+    # ── 3. Plant Gap Type 2: Aggregate-Only Rounding Differences ───
+    # 5 transactions with tiny per-row drift that is within tolerance.
+    # The discrepancy is intended to become visible in total sums.
     rounding_amounts = [333.33, 777.77, 1111.11, 2999.99, 4567.89]
     rounding_txn_ids = []
     for amount in rounding_amounts:
@@ -223,16 +224,10 @@ def generate():
         }
         transactions.append(txn)
 
-        # Settlement with slightly different amount (bank rounds differently)
+        # Settlement with tiny drift (within row tolerance), but totals drift when summed.
         stl_counter += 1
         settle_date = settlement_date_for(txn_date)
-        # Simulate bank's rounding: recalculate with different intermediate rounding
-        bank_fee = amount * 0.02
-        bank_tax = bank_fee * 0.18
-        bank_net = round(amount - bank_fee - bank_tax, 2)  # rounds final, not intermediates
-        # Ensure there IS a difference
-        if bank_net == net_amount:
-            bank_net = round(bank_net + random.choice([-0.01, 0.01, -0.02, 0.02]), 2)
+        bank_net = round(net_amount - ROUNDING_DRIFT_PER_ROW, 2)
 
         stl = {
             "settlement_id": generate_settlement_id(stl_counter, settle_date),
@@ -311,7 +306,10 @@ def generate():
     print(f"    Total rows     : {len(transactions)}")
     print(f"    Normal         : {NUM_NORMAL_TRANSACTIONS}")
     print(f"    Cross-month    : 3  (IDs: {cross_month_txn_ids})")
-    print(f"    Rounding       : 5  (IDs: {rounding_txn_ids})")
+    print(
+        f"    Rounding       : 5  (IDs: {rounding_txn_ids}, "
+        f"aggregate drift: {ROUNDING_DRIFT_PER_ROW * len(rounding_txn_ids):.2f})"
+    )
     print(f"    Duplicates     : 2  (IDs: {duplicate_txn_ids})")
     print()
     print(f"  Settlements CSV  : {stl_path}")

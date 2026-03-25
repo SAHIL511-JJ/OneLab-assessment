@@ -66,7 +66,7 @@ assess/
 │   └── reconcile.py              # Python reconciliation engine
 ├── dashboard/
 │   ├── index.html                # Interactive dashboard
-│   ├── style.css                 # Dark theme with glassmorphism
+│   ├── style.css                 # Light sage/beige dashboard theme
 │   └── app.js                    # Client-side reconciliation + rendering
 ├── output/
 │   └── reconciliation_report.json
@@ -82,7 +82,7 @@ assess/
 | # | Gap Type | Count | Description |
 |---|----------|-------|-------------|
 | 1 | **Cross-month settlement** | 3 | Transactions on March 30-31, settled in April 1-3 |
-| 2 | **Rounding difference** | 5 | Fee/tax rounding produces ₹0.01-₹0.03 mismatches |
+| 2 | **Rounding difference (aggregate)** | 5 rows | Tiny ₹0.01 drift per row is tolerated; gap appears when totals are summed |
 | 3 | **Duplicate entry** | 2 | Same transaction appearing twice in platform data |
 | 4 | **Orphan refund** | 2 | Bank refunds referencing non-existent transactions |
 

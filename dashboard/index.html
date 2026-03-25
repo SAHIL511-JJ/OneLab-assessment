@@ -24,10 +24,34 @@
                     <p class="subtitle">Match transactions | Find discrepancies | Balance the books</p>
                 </div>
             </div>
+            <nav class="header-actions" aria-label="Primary">
+                <a class="header-link active" href="./index.html">Dashboard</a>
+                <a class="header-link" href="./how-to-test.html">How to Test</a>
+            </nav>
         </div>
     </header>
 
     <main id="app-main">
+        <section class="glass-card quick-guide-card">
+            <div class="quick-guide-header">
+                <h2 class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 1 1 5.82 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    How to Test This Tool
+                </h2>
+                <a class="btn btn-secondary" href="./how-to-test.html">Open Full Guide</a>
+            </div>
+            <div class="quick-guide-grid">
+                <div class="quick-guide-step"><strong>1. Load files:</strong> upload both CSVs or click <code>Use Sample Data</code>.</div>
+                <div class="quick-guide-step"><strong>2. Map fields:</strong> confirm the required columns and click <code>Apply Mapping</code>.</div>
+                <div class="quick-guide-step"><strong>3. Set tolerance + run:</strong> adjust <code>Advanced Settings</code> if needed, then click <code>Run Reconciliation</code>.</div>
+                <div class="quick-guide-step"><strong>4. Review results:</strong> use tabs and note that tiny rounding drift can show up only in totals.</div>
+            </div>
+        </section>
+
         <section id="upload-section" class="glass-card">
             <h2 class="section-title">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -124,6 +148,29 @@
                 </div>
             </section>
 
+            <section class="settings-panel">
+                <div class="settings-header">
+                    <h3>Advanced Settings</h3>
+                    <p>Set row mismatch tolerance used for amount comparison.</p>
+                </div>
+                <div class="settings-grid">
+                    <label class="setting-field" for="row-tolerance-input">
+                        <span>Row Mismatch Tolerance (&#8377;)</span>
+                        <input
+                            id="row-tolerance-input"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value="0.02"
+                        >
+                    </label>
+                    <p id="row-tolerance-help" class="setting-help">
+                        Differences up to this value are treated as rounding tolerance.
+                    </p>
+                </div>
+            </section>
+
             <div class="upload-actions">
                 <button id="btn-sample" class="btn btn-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -169,6 +216,7 @@
                     <div class="card-label">Orphan Refunds</div>
                 </div>
             </div>
+            <div id="aggregate-rounding-note" class="aggregate-rounding-note hidden"></div>
 
             <div class="tabs-container glass-card">
                 <div class="tab-bar" id="tab-bar">
@@ -235,7 +283,7 @@
 
                 <div class="tab-panel" id="panel-mismatch">
                     <div class="panel-description">
-                        <p>Rows where the expected platform amount differs from the bank settlement amount after column mapping and normalization.</p>
+                        <p>Rows where expected and actual amounts differ by more than the configured row tolerance. Tiny rounding differences within tolerance are tracked in aggregate totals.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-mismatch">

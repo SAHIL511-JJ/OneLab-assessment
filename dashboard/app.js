@@ -5,6 +5,9 @@
 
 const SAMPLE_TXN_URL = './data/transactions.csv';
 const SAMPLE_STL_URL = './data/bank_settlements.csv';
+const DEFAULT_ROW_MISMATCH_TOLERANCE = 0.02;
+const MIN_ROW_MISMATCH_TOLERANCE = 0;
+const MAX_ROW_MISMATCH_TOLERANCE = 1;
 
 const REQUIRED_FIELDS = {
     txn: [
@@ -43,6 +46,7 @@ let inputMode = null;
 let mappingApplied = false;
 let currentSort = { column: null, ascending: true };
 let currentMapping = { txn: {}, stl: {} };
+let rowMismatchTolerance = DEFAULT_ROW_MISMATCH_TOLERANCE;
 
 const dom = {
     txnUploadZone: document.getElementById('txn-upload-zone'),
@@ -63,6 +67,9 @@ const dom = {
     validationList: document.getElementById('validation-list'),
     txnFileName: document.getElementById('txn-file-name'),
     stlFileName: document.getElementById('stl-file-name'),
+    aggregateRoundingNote: document.getElementById('aggregate-rounding-note'),
+    rowToleranceInput: document.getElementById('row-tolerance-input'),
+    rowToleranceHelp: document.getElementById('row-tolerance-help'),
 };
 
 function normalizeHeaderName(value) {
@@ -109,7 +116,37 @@ function resetResults() {
     reconciliationReport = null;
     dom.resultsSection.classList.add('hidden');
     dom.searchInput.value = '';
+    dom.aggregateRoundingNote.classList.add('hidden');
+    dom.aggregateRoundingNote.textContent = '';
     window._allTxns = null;
+}
+
+function clampTolerance(value) {
+    return Math.min(MAX_ROW_MISMATCH_TOLERANCE, Math.max(MIN_ROW_MISMATCH_TOLERANCE, value));
+}
+
+function updateToleranceHelpMessage() {
+    dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance.`;
+}
+
+function applyToleranceSettingFromInput() {
+    const rawValue = normalizeCell(dom.rowToleranceInput.value);
+    if (!rawValue) {
+        rowMismatchTolerance = DEFAULT_ROW_MISMATCH_TOLERANCE;
+        dom.rowToleranceInput.value = rowMismatchTolerance.toFixed(2);
+        updateToleranceHelpMessage();
+        return;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+        dom.rowToleranceInput.value = rowMismatchTolerance.toFixed(2);
+        return;
+    }
+
+    rowMismatchTolerance = clampTolerance(Math.round(parsed * 100) / 100);
+    dom.rowToleranceInput.value = rowMismatchTolerance.toFixed(2);
+    updateToleranceHelpMessage();
 }
 
 function setMappingBadge(label, tone) {
@@ -961,6 +998,10 @@ function reconcile(transactions, settlements) {
     const matched = [];
     const crossMonth = [];
     const amountMismatches = [];
+    let aggregateExpectedTotal = 0;
+    let aggregateActualTotal = 0;
+    let aggregatePairsCompared = 0;
+    let toleratedRoundingRows = 0;
 
     stlIds.forEach((transactionId) => {
         if (!txnIds.has(transactionId)) {
@@ -1011,12 +1052,22 @@ function reconcile(transactions, settlements) {
 
         if (isCrossMonth) {
             crossMonth.push(record);
-        } else if (difference > 0.001) {
+        } else if (difference > rowMismatchTolerance) {
             amountMismatches.push(record);
         } else {
             matched.push(record);
+            aggregateExpectedTotal += expectedAmount;
+            aggregateActualTotal += actualAmount;
+            aggregatePairsCompared += 1;
+            if (difference > 0 && difference <= rowMismatchTolerance) {
+                toleratedRoundingRows += 1;
+            }
         }
     });
+
+    aggregateExpectedTotal = Math.round(aggregateExpectedTotal * 100) / 100;
+    aggregateActualTotal = Math.round(aggregateActualTotal * 100) / 100;
+    const aggregateRoundingGap = Math.round((aggregateExpectedTotal - aggregateActualTotal) * 100) / 100;
 
     return {
         summary: {
@@ -1029,6 +1080,12 @@ function reconcile(transactions, settlements) {
             duplicates_in_settlements: duplicates.filter((item) => item.dataset === 'bank_settlements').length,
             missing_settlements: missingSettlements.length,
             orphan_refunds: orphanRefunds.length,
+            row_mismatch_tolerance: rowMismatchTolerance,
+            aggregate_pairs_compared: aggregatePairsCompared,
+            tolerated_rounding_rows: toleratedRoundingRows,
+            aggregate_expected_amount: aggregateExpectedTotal,
+            aggregate_actual_amount: aggregateActualTotal,
+            aggregate_rounding_gap: aggregateRoundingGap,
         },
         discrepancies: {
             cross_month: crossMonth,
@@ -1036,6 +1093,13 @@ function reconcile(transactions, settlements) {
             duplicates,
             orphan_refunds: orphanRefunds,
             missing_settlements: missingSettlements,
+            aggregate_rounding: {
+                expected_total: aggregateExpectedTotal,
+                actual_total: aggregateActualTotal,
+                gap: aggregateRoundingGap,
+                rows_with_tolerated_rounding: toleratedRoundingRows,
+                row_tolerance: rowMismatchTolerance,
+            },
         },
         matched,
     };
@@ -1202,6 +1266,30 @@ function renderResults(report) {
     animateCount('card-duplicates', report.summary.duplicates_in_transactions + report.summary.duplicates_in_settlements);
     animateCount('card-orphans', report.summary.orphan_refunds);
 
+    const gap = Number(report.summary.aggregate_rounding_gap || 0);
+    const toleratedRows = Number(report.summary.tolerated_rounding_rows || 0);
+    const tolerance = Number(report.summary.row_mismatch_tolerance || 0);
+    const expectedTotal = Number(report.summary.aggregate_expected_amount || 0);
+    const actualTotal = Number(report.summary.aggregate_actual_amount || 0);
+    if (gap !== 0 || toleratedRows > 0) {
+        const directionText = gap > 0
+            ? 'Platform expected total is higher than bank actual total.'
+            : (gap < 0
+                ? 'Bank actual total is higher than platform expected total.'
+                : 'Platform and bank totals are equal.');
+        const toleranceText = toleratedRows > 0
+            ? `${toleratedRows} row(s) were within your tolerance (₹${formatAmount(tolerance)}), so they were not marked as mismatches.`
+            : 'No rows were absorbed by tolerance in this run.';
+        dom.aggregateRoundingNote.textContent = `Rounding summary: totals differ by ₹${formatAmount(Math.abs(gap))}. ${directionText}
+Platform total: ₹${formatAmount(expectedTotal)} | Bank total: ₹${formatAmount(actualTotal)}
+${toleranceText}
+If you want stricter results, lower tolerance and run reconciliation again.`;
+        dom.aggregateRoundingNote.classList.remove('hidden');
+    } else {
+        dom.aggregateRoundingNote.classList.add('hidden');
+        dom.aggregateRoundingNote.textContent = '';
+    }
+
     const allTransactions = [];
     report.matched.forEach((row) => allTransactions.push({ ...row, status: 'MATCHED' }));
     report.discrepancies.cross_month.forEach((row) => allTransactions.push({ ...row, status: 'CROSS_MONTH' }));
@@ -1299,6 +1387,18 @@ dom.searchInput.addEventListener('input', (event) => {
     renderAllTable(filtered);
 });
 
+dom.rowToleranceInput.addEventListener('change', () => {
+    const previousTolerance = rowMismatchTolerance;
+    applyToleranceSettingFromInput();
+    if (reconciliationReport && previousTolerance !== rowMismatchTolerance) {
+        dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance. Run reconciliation again to apply this new value.`;
+    }
+});
+
+dom.rowToleranceInput.addEventListener('blur', () => {
+    applyToleranceSettingFromInput();
+});
+
 document.querySelector('#table-all thead').addEventListener('click', (event) => {
     const header = event.target.closest('th');
     if (!header || !header.dataset.sort || !window._allTxns) {
@@ -1331,5 +1431,6 @@ document.querySelector('#table-all thead').addEventListener('click', (event) => 
     renderAllTable(sorted);
 });
 
+applyToleranceSettingFromInput();
 updateReadyState();
 

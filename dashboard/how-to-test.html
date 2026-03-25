@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="How to test the Payment Reconciliation Tool.">
+    <title>How to Test | Payment Reconciliation Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header id="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <polyline points="9 12 11 14 15 10"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Payment Reconciliation</h1>
+                    <p class="subtitle">Quick guide for testers</p>
+                </div>
+            </div>
+            <nav class="header-actions" aria-label="Primary">
+                <a class="header-link" href="./index.html">Dashboard</a>
+                <a class="header-link active" href="./how-to-test.html">How to Test</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="app-main">
+        <section class="glass-card guide-card">
+            <h2 class="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                How to Test
+            </h2>
+            <p class="guide-subtitle">Use this checklist while testing the app.</p>
+
+            <div class="guide-grid">
+                <article class="guide-block">
+                    <h3>Step 1: Start</h3>
+                    <ul>
+                        <li>Open the dashboard page.</li>
+                        <li>Choose one option: upload your files or click <code>Use Sample Data</code>.</li>
+                        <li>If you upload files, upload both CSVs.</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>Step 2: Map columns</h3>
+                    <ul>
+                        <li>Check the suggested columns in the mapping panel.</li>
+                        <li>Fix any wrong dropdown selection.</li>
+                        <li>Click <code>Apply Mapping</code>.</li>
+                        <li>Wait for <code>Mapping applied</code> and preflight success.</li>
+                        <li>Set row mismatch tolerance in <code>Advanced Settings</code> (default: <code>0.02</code>).</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>Step 3: Run reconciliation</h3>
+                    <ul>
+                        <li>Click <code>Run Reconciliation</code>.</li>
+                        <li>See the summary cards at the top.</li>
+                        <li>Use tabs to inspect each discrepancy type.</li>
+                        <li>Read the <strong>Rounding summary</strong> note under summary cards.</li>
+                        <li>Tiny row drift up to your tolerance is not marked as mismatch and is tracked in totals.</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>What each tab means</h3>
+                    <ul>
+                        <li><strong>Cross-Month:</strong> txn and settlement are in different months.</li>
+                        <li><strong>Amount Mismatch:</strong> row difference is above tolerance.</li>
+                        <li><strong>Duplicates:</strong> same transaction ID appears more than once.</li>
+                        <li><strong>Orphan Refunds:</strong> settlement has no matching transaction row.</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>How tolerance works</h3>
+                    <ul>
+                        <li>For each matched row, app calculates: <code>abs(expected - actual)</code>.</li>
+                        <li>If difference is <strong>less than or equal to tolerance</strong>, row is not marked as mismatch.</li>
+                        <li>If difference is <strong>greater than tolerance</strong>, row appears in <strong>Amount Mismatch</strong>.</li>
+                        <li>Those small tolerated differences are added in the <strong>Rounding summary</strong> totals section.</li>
+                        <li><code>0.00</code> = strict mode, <code>0.02</code> = balanced default, <code>0.05</code> = lenient mode.</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>Required fields</h3>
+                    <ul>
+                        <li>Transactions CSV: transaction ID, transaction date, expected/net amount.</li>
+                        <li>Settlements CSV: transaction ID, settlement date, settlement amount.</li>
+                        <li>Other fields are optional and auto-detected when possible.</li>
+                    </ul>
+                </article>
+
+                <article class="guide-block">
+                    <h3>If something fails</h3>
+                    <ul>
+                        <li>Check missing or wrong column mapping first.</li>
+                        <li>Fix invalid date or amount values in your CSV.</li>
+                        <li>If row mismatches are zero, still check <strong>Rounding summary</strong> for total drift.</li>
+                        <li>For stricter checking, lower tolerance and run reconciliation again.</li>
+                        <li>Upload both files again and rerun.</li>
+                    </ul>
+                </article>
+            </div>
+
+            <div class="guide-actions">
+                <a class="btn btn-primary" href="./index.html">Back to Dashboard</a>
+            </div>
+        </section>
+    </main>
+
+    <footer id="app-footer">
+        <p>Payment Reconciliation Tool - OneLab AI Readiness Assessment</p>
+    </footer>
+</body>
+</html>

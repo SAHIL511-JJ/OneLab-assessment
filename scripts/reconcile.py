@@ -17,6 +17,7 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
 TXN_FILE = DATA_DIR / "transactions.csv"
 STL_FILE = DATA_DIR / "bank_settlements.csv"
 REPORT_FILE = OUTPUT_DIR / "reconciliation_report.json"
+ROW_MISMATCH_TOLERANCE = 0.02
 
 
 def load_csv(filepath):
@@ -108,6 +109,10 @@ def reconcile():
     cross_month = []
     amount_mismatches = []
     matched = []
+    aggregate_expected_total = 0.0
+    aggregate_actual_total = 0.0
+    aggregate_pairs_compared = 0
+    tolerated_rounding_rows = 0
 
     for tid in sorted(matched_ids):
         txn = txn_map[tid]
@@ -120,8 +125,9 @@ def reconcile():
         stl_date = datetime.strptime(stl["settlement_date"], "%Y-%m-%d")
 
         is_cross_month = txn_date.month != stl_date.month or txn_date.year != stl_date.year
-        amount_diff = round(abs(txn_net - stl_amt), 2)
-        has_mismatch = amount_diff > 0.001
+        signed_diff = round(txn_net - stl_amt, 2)
+        amount_diff = abs(signed_diff)
+        has_mismatch = amount_diff > ROW_MISMATCH_TOLERANCE
 
         record = {
             "transaction_id": tid,
@@ -142,6 +148,15 @@ def reconcile():
             amount_mismatches.append(record)
         else:
             matched.append(record)
+            aggregate_expected_total += txn_net
+            aggregate_actual_total += stl_amt
+            aggregate_pairs_compared += 1
+            if 0 < amount_diff <= ROW_MISMATCH_TOLERANCE:
+                tolerated_rounding_rows += 1
+
+    aggregate_expected_total = round(aggregate_expected_total, 2)
+    aggregate_actual_total = round(aggregate_actual_total, 2)
+    aggregate_rounding_gap = round(aggregate_expected_total - aggregate_actual_total, 2)
 
     # ── 6. Build Full Transaction List with Status ──────────────────
     all_transactions = []
@@ -193,6 +208,12 @@ def reconcile():
             "duplicates_in_settlements": len(stl_duplicates),
             "missing_settlements": len(missing_settlements),
             "orphan_refunds": len(orphan_refunds),
+            "row_mismatch_tolerance": ROW_MISMATCH_TOLERANCE,
+            "aggregate_pairs_compared": aggregate_pairs_compared,
+            "tolerated_rounding_rows": tolerated_rounding_rows,
+            "aggregate_expected_amount": aggregate_expected_total,
+            "aggregate_actual_amount": aggregate_actual_total,
+            "aggregate_rounding_gap": aggregate_rounding_gap,
         },
         "discrepancies": {
             "cross_month": cross_month,
@@ -200,6 +221,13 @@ def reconcile():
             "duplicates": all_duplicates,
             "orphan_refunds": orphan_refunds,
             "missing_settlements": missing_settlements,
+            "aggregate_rounding": {
+                "expected_total": aggregate_expected_total,
+                "actual_total": aggregate_actual_total,
+                "gap": aggregate_rounding_gap,
+                "rows_with_tolerated_rounding": tolerated_rounding_rows,
+                "row_tolerance": ROW_MISMATCH_TOLERANCE,
+            },
         },
         "all_transactions": all_transactions,
     }
@@ -223,6 +251,7 @@ def reconcile():
     print(f"  📋 Duplicate stls     : {s['duplicates_in_settlements']}")
     print(f"  ❌ Missing settlements : {s['missing_settlements']}")
     print(f"  🔄 Orphan refunds     : {s['orphan_refunds']}")
+    print(f"  🔢 Aggregate rounding gap : {s['aggregate_rounding_gap']:.2f}")
     print("-" * 60)
     print(f"  Report saved to       : {REPORT_FILE}")
     print("=" * 60)

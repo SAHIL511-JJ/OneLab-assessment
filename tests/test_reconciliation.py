@@ -129,25 +129,26 @@ class TestCrossMonthDetection:
         )
 
 
-# ── Test 3: Rounding Errors Detected ────────────────────────────────
+# ── Test 3: Aggregate-Only Rounding Gap Detected ────────────────────
 
 class TestRoundingErrors:
-    def test_rounding_errors_found(self, report):
+    def test_rounding_rows_not_counted_as_row_mismatch(self, report):
         count = report["summary"]["amount_mismatches"]
-        assert count == 5, f"Expected exactly 5 rounding mismatches, found {count}"
+        assert count == 0, f"Expected 0 row-level amount mismatches, found {count}"
 
-    def test_rounding_differences_are_small(self, report):
-        for item in report["discrepancies"]["amount_mismatches"]:
-            diff = item["difference"]
-            assert diff <= 0.10, (
-                f"{item['transaction_id']}: difference ₹{diff} is too large for a rounding error"
-            )
+    def test_tolerated_rounding_rows_count(self, report):
+        count = report["summary"]["tolerated_rounding_rows"]
+        assert count == 5, f"Expected 5 tolerated rounding rows, found {count}"
 
-    def test_rounding_differences_are_nonzero(self, report):
-        for item in report["discrepancies"]["amount_mismatches"]:
-            assert item["difference"] > 0, (
-                f"{item['transaction_id']}: difference is zero, should be nonzero"
-            )
+    def test_aggregate_rounding_gap_exists(self, report):
+        gap = report["summary"]["aggregate_rounding_gap"]
+        assert gap != 0, "Expected non-zero aggregate rounding gap"
+        assert round(abs(gap), 2) == 0.05, f"Expected aggregate gap of 0.05, found {gap}"
+
+    def test_aggregate_rounding_discrepancy_block(self, report):
+        aggregate = report["discrepancies"]["aggregate_rounding"]
+        assert aggregate["rows_with_tolerated_rounding"] == 5
+        assert round(abs(aggregate["gap"]), 2) == 0.05
 
 
 # ── Test 4: Duplicates Detected ──────────────────────────────────────
@@ -227,6 +228,7 @@ class TestReportStructure:
             "total_transactions", "total_settlements", "matched",
             "cross_month", "amount_mismatches", "duplicates_in_transactions",
             "orphan_refunds",
+            "row_mismatch_tolerance", "tolerated_rounding_rows", "aggregate_rounding_gap",
         }
         assert required.issubset(set(report["summary"].keys()))
 
@@ -234,5 +236,6 @@ class TestReportStructure:
         required = {
             "cross_month", "amount_mismatches", "duplicates",
             "orphan_refunds",
+            "aggregate_rounding",
         }
         assert required.issubset(set(report["discrepancies"].keys()))
