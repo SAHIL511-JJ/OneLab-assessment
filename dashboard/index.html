@@ -79,6 +79,21 @@
                     <p class="upload-status" id="stl-status"></p>
                 </div>
             </div>
+            <p class="upload-role-note">
+                File roles: <strong>Transactions CSV</strong> is your platform export, and <strong>Bank Settlements CSV</strong> is the bank settlement export.
+            </p>
+            <section class="download-kit">
+                <p class="download-kit-title">Need quick test files?</p>
+                <div class="download-kit-actions">
+                    <a class="btn btn-secondary btn-sm" href="./data/download_test_transactions_30.csv" download>
+                        Download Transactions (30 rows)
+                    </a>
+                    <a class="btn btn-secondary btn-sm" href="./data/download_test_settlements_30.csv" download>
+                        Download Settlements (30 rows)
+                    </a>
+                </div>
+                <p class="download-kit-note">These are optional sample uploads. You can still use your own CSV files.</p>
+            </section>
 
             <section id="mapping-panel" class="mapping-panel hidden">
                 <div class="mapping-header">
@@ -213,10 +228,13 @@
                 <div class="summary-card orphan">
                     <div class="card-icon">RF</div>
                     <div class="card-value" id="card-orphans">0</div>
-                    <div class="card-label">Orphan Refunds</div>
+                    <div class="card-label">Orphan Rows</div>
                 </div>
             </div>
             <div id="aggregate-rounding-note" class="aggregate-rounding-note hidden"></div>
+            <div class="result-scope-note">
+                <strong>Understanding the Results:</strong> The <strong>Variance</strong> is calculated from <strong>ALL Matched IDs</strong> — transactions where the same ID exists in both platform and bank datasets. This includes Clean Matched, Cross-Month, and Amount Mismatch rows. <strong>Orphan</strong>, <strong>Missing</strong>, and <strong>Duplicate</strong> rows have no matching ID, so they are <em>not</em> included in the variance.
+            </div>
 
             <div class="tabs-container glass-card">
                 <div class="tab-bar" id="tab-bar">
@@ -224,7 +242,7 @@
                     <button class="tab" data-tab="cross-month">Cross-Month</button>
                     <button class="tab" data-tab="mismatch">Amount Mismatch</button>
                     <button class="tab" data-tab="duplicates">Duplicates</button>
-                    <button class="tab" data-tab="orphans">Orphan Refunds</button>
+                    <button class="tab" data-tab="orphans">Orphan Rows</button>
                 </div>
 
                 <div class="table-controls">
@@ -326,16 +344,16 @@
 
                 <div class="tab-panel" id="panel-orphans">
                     <div class="panel-description">
-                        <p>Settlement rows referencing transaction IDs that do not exist in the uploaded transactions file.</p>
+                        <p>Rows that exist only on one side (platform or bank) and cannot be paired by transaction ID.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-orphans">
                             <thead>
                                 <tr>
-                                    <th>Settlement ID</th>
-                                    <th>Transaction ID (Missing)</th>
+                                    <th>Type</th>
+                                    <th>Transaction ID</th>
                                     <th>Amount (&#8377;)</th>
-                                    <th>Settlement Date</th>
+                                    <th>Date</th>
                                     <th>UTR</th>
                                     <th>Bank Reference</th>
                                 </tr>

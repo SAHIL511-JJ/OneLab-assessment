@@ -19,6 +19,47 @@ STL_FILE = DATA_DIR / "bank_settlements.csv"
 REPORT_FILE = OUTPUT_DIR / "reconciliation_report.json"
 ROW_MISMATCH_TOLERANCE = 0.02
 
+# Common date formats to try when parsing
+DATE_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",  # 2025-03-15 14:30:00
+    "%Y-%m-%d",            # 2025-03-15
+    "%d-%m-%Y %H:%M:%S",  # 15-03-2025 14:30:00
+    "%d-%m-%Y",            # 15-03-2025
+    "%d/%m/%Y %H:%M:%S",  # 15/03/2025 14:30:00
+    "%d/%m/%Y",            # 15/03/2025
+    "%m/%d/%Y %H:%M:%S",  # 03/15/2025 14:30:00
+    "%m/%d/%Y",            # 03/15/2025
+    "%Y/%m/%d %H:%M:%S",  # 2025/03/15 14:30:00
+    "%Y/%m/%d",            # 2025/03/15
+    "%d %b %Y",            # 15 Mar 2025
+    "%d %B %Y",            # 15 March 2025
+    "%Y-%m-%dT%H:%M:%S",  # ISO format 2025-03-15T14:30:00
+    "%Y-%m-%dT%H:%M:%SZ", # ISO with Z
+]
+
+
+def parse_date(date_string):
+    """Try to parse a date string using multiple formats."""
+    if not date_string or not date_string.strip():
+        return None
+    
+    date_string = date_string.strip()
+    
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+    
+    # Try Python's ISO parser as a last resort (supports offsets like +05:30)
+    try:
+        return datetime.fromisoformat(date_string.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    # If all formats fail, return None
+    return None
+
 
 def load_csv(filepath):
     """Load a CSV file into a list of dicts."""
@@ -109,9 +150,16 @@ def reconcile():
     cross_month = []
     amount_mismatches = []
     matched = []
-    aggregate_expected_total = 0.0
-    aggregate_actual_total = 0.0
-    aggregate_pairs_compared = 0
+    
+    # Variance calculation: for ALL matched IDs (IDs found in both datasets)
+    variance_expected_total = 0.0
+    variance_actual_total = 0.0
+    variance_pairs_count = 0
+    
+    # Separate tracking for "clean matched" (same month, within tolerance)
+    clean_matched_expected = 0.0
+    clean_matched_actual = 0.0
+    clean_matched_count = 0
     tolerated_rounding_rows = 0
 
     for tid in sorted(matched_ids):
@@ -121,13 +169,22 @@ def reconcile():
         txn_net = float(txn["net_amount"])
         stl_amt = float(stl["settlement_amount"])
 
-        txn_date = datetime.strptime(txn["transaction_date"], "%Y-%m-%d %H:%M:%S")
-        stl_date = datetime.strptime(stl["settlement_date"], "%Y-%m-%d")
+        txn_date = parse_date(txn["transaction_date"])
+        stl_date = parse_date(stl["settlement_date"])
+        if txn_date is None:
+            raise ValueError(
+                f"Unsupported transaction_date format for {tid}: {txn['transaction_date']}"
+            )
+        if stl_date is None:
+            raise ValueError(
+                f"Unsupported settlement_date format for {tid}: {stl['settlement_date']}"
+            )
 
         is_cross_month = txn_date.month != stl_date.month or txn_date.year != stl_date.year
+        # Signed difference: positive = expected > actual (SHORT), negative = actual > expected (OVER)
         signed_diff = round(txn_net - stl_amt, 2)
-        amount_diff = abs(signed_diff)
-        has_mismatch = amount_diff > ROW_MISMATCH_TOLERANCE
+        abs_diff = abs(signed_diff)
+        has_mismatch = abs_diff > ROW_MISMATCH_TOLERANCE
 
         record = {
             "transaction_id": tid,
@@ -135,12 +192,17 @@ def reconcile():
             "settlement_date": stl["settlement_date"],
             "expected_amount": txn_net,
             "actual_amount": stl_amt,
-            "difference": amount_diff,
+            "difference": signed_diff,  # Signed for display (+/-)
             "payment_method": txn["payment_method"],
             "merchant_id": txn["merchant_id"],
             "order_id": txn["order_id"],
             "utr": stl["utr"],
         }
+
+        # Add to variance totals for ALL matched IDs
+        variance_expected_total += txn_net
+        variance_actual_total += stl_amt
+        variance_pairs_count += 1
 
         if is_cross_month:
             cross_month.append(record)
@@ -148,15 +210,20 @@ def reconcile():
             amount_mismatches.append(record)
         else:
             matched.append(record)
-            aggregate_expected_total += txn_net
-            aggregate_actual_total += stl_amt
-            aggregate_pairs_compared += 1
-            if 0 < amount_diff <= ROW_MISMATCH_TOLERANCE:
+            clean_matched_expected += txn_net
+            clean_matched_actual += stl_amt
+            clean_matched_count += 1
+            if 0 < abs_diff <= ROW_MISMATCH_TOLERANCE:
                 tolerated_rounding_rows += 1
 
-    aggregate_expected_total = round(aggregate_expected_total, 2)
-    aggregate_actual_total = round(aggregate_actual_total, 2)
-    aggregate_rounding_gap = round(aggregate_expected_total - aggregate_actual_total, 2)
+    # Round all totals
+    variance_expected_total = round(variance_expected_total, 2)
+    variance_actual_total = round(variance_actual_total, 2)
+    total_variance = round(variance_expected_total - variance_actual_total, 2)
+    
+    clean_matched_expected = round(clean_matched_expected, 2)
+    clean_matched_actual = round(clean_matched_actual, 2)
+    clean_matched_variance = round(clean_matched_expected - clean_matched_actual, 2)
 
     # ── 6. Build Full Transaction List with Status ──────────────────
     all_transactions = []
@@ -209,11 +276,17 @@ def reconcile():
             "missing_settlements": len(missing_settlements),
             "orphan_refunds": len(orphan_refunds),
             "row_mismatch_tolerance": ROW_MISMATCH_TOLERANCE,
-            "aggregate_pairs_compared": aggregate_pairs_compared,
+            # Variance for ALL matched IDs
+            "variance_pairs_count": variance_pairs_count,
+            "variance_expected_amount": variance_expected_total,
+            "variance_actual_amount": variance_actual_total,
+            "total_variance": total_variance,
+            # Clean matched subset (same month, within tolerance)
+            "clean_matched_count": clean_matched_count,
+            "clean_matched_expected": clean_matched_expected,
+            "clean_matched_actual": clean_matched_actual,
+            "clean_matched_variance": clean_matched_variance,
             "tolerated_rounding_rows": tolerated_rounding_rows,
-            "aggregate_expected_amount": aggregate_expected_total,
-            "aggregate_actual_amount": aggregate_actual_total,
-            "aggregate_rounding_gap": aggregate_rounding_gap,
         },
         "discrepancies": {
             "cross_month": cross_month,
@@ -221,10 +294,12 @@ def reconcile():
             "duplicates": all_duplicates,
             "orphan_refunds": orphan_refunds,
             "missing_settlements": missing_settlements,
-            "aggregate_rounding": {
-                "expected_total": aggregate_expected_total,
-                "actual_total": aggregate_actual_total,
-                "gap": aggregate_rounding_gap,
+            "variance_breakdown": {
+                "total_matched_ids": variance_pairs_count,
+                "expected_total": variance_expected_total,
+                "actual_total": variance_actual_total,
+                "total_variance": total_variance,
+                "clean_matched_variance": clean_matched_variance,
                 "rows_with_tolerated_rounding": tolerated_rounding_rows,
                 "row_tolerance": ROW_MISMATCH_TOLERANCE,
             },
@@ -238,23 +313,39 @@ def reconcile():
 
     # ── Print Summary ───────────────────────────────────────────────
     s = report["summary"]
-    print("=" * 60)
+    print("=" * 70)
     print("  RECONCILIATION REPORT")
-    print("=" * 60)
+    print("=" * 70)
     print(f"  Transactions loaded   : {s['total_transactions']} ({s['unique_transaction_ids']} unique)")
     print(f"  Settlements loaded    : {s['total_settlements']} ({s['unique_settlement_ids']} unique)")
-    print("-" * 60)
-    print(f"  ✅ Matched            : {s['matched']}")
-    print(f"  📅 Cross-month        : {s['cross_month']}")
-    print(f"  💰 Amount mismatches  : {s['amount_mismatches']}")
-    print(f"  📋 Duplicate txns     : {s['duplicates_in_transactions']}")
-    print(f"  📋 Duplicate stls     : {s['duplicates_in_settlements']}")
-    print(f"  ❌ Missing settlements : {s['missing_settlements']}")
-    print(f"  🔄 Orphan refunds     : {s['orphan_refunds']}")
-    print(f"  🔢 Aggregate rounding gap : {s['aggregate_rounding_gap']:.2f}")
-    print("-" * 60)
-    print(f"  Report saved to       : {REPORT_FILE}")
-    print("=" * 60)
+    print("=" * 70)
+    print()
+    print("  💰 RECONCILIATION VARIANCE (Matched IDs Only)")
+    print("  " + "-" * 66)
+    print(f"  Matched ID Pairs      : {s['variance_pairs_count']} transactions")
+    print(f"  Expected Amount       : ₹{s['variance_expected_amount']:,.2f}")
+    print(f"  Actual Amount (Bank)  : ₹{s['variance_actual_amount']:,.2f}")
+    print(f"  {'─' * 66}")
+    variance_sign = "SHORT" if s['total_variance'] > 0 else "OVER" if s['total_variance'] < 0 else "BALANCED"
+    print(f"  TOTAL VARIANCE        : ₹{abs(s['total_variance']):.2f} {variance_sign}")
+    print()
+    print("  📊 TRANSACTION BREAKDOWN (All Matched IDs)")
+    print("  " + "-" * 66)
+    print(f"  ✅ Clean Matched (same month, ≤tolerance) : {s['matched']}")
+    print(f"  📅 Cross-Month                            : {s['cross_month']}")
+    print(f"  💰 Amount Mismatches (>tolerance)         : {s['amount_mismatches']}")
+    print(f"  🔢 Tolerated Rounding Rows                : {s['tolerated_rounding_rows']} (≤₹{s['row_mismatch_tolerance']:.2f} each)")
+    print()
+    print("  ⚠️  DATA QUALITY ISSUES (IDs not matched - excluded from variance)")
+    print("  " + "-" * 66)
+    print(f"  📋 Duplicate Transactions     : {s['duplicates_in_transactions']}")
+    print(f"  📋 Duplicate Settlements      : {s['duplicates_in_settlements']}")
+    print(f"  ❌ Missing Settlements        : {s['missing_settlements']}")
+    print(f"  🔄 Orphan Refunds             : {s['orphan_refunds']}")
+    print()
+    print("=" * 70)
+    print(f"  📄 Full report saved to: {REPORT_FILE}")
+    print("=" * 70)
 
 
 if __name__ == "__main__":

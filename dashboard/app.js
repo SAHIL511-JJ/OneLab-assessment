@@ -8,6 +8,7 @@ const SAMPLE_STL_URL = './data/bank_settlements.csv';
 const DEFAULT_ROW_MISMATCH_TOLERANCE = 0.02;
 const MIN_ROW_MISMATCH_TOLERANCE = 0;
 const MAX_ROW_MISMATCH_TOLERANCE = 1;
+const RESULTS_STORAGE_KEY = 'reconciliation_results_v1';
 
 const REQUIRED_FIELDS = {
     txn: [
@@ -118,7 +119,42 @@ function resetResults() {
     dom.searchInput.value = '';
     dom.aggregateRoundingNote.classList.add('hidden');
     dom.aggregateRoundingNote.textContent = '';
+    sessionStorage.removeItem(RESULTS_STORAGE_KEY);
     window._allTxns = null;
+}
+
+function persistResultsState() {
+    if (!reconciliationReport) {
+        sessionStorage.removeItem(RESULTS_STORAGE_KEY);
+        return;
+    }
+
+    sessionStorage.setItem(
+        RESULTS_STORAGE_KEY,
+        JSON.stringify({
+            report: reconciliationReport,
+            saved_at: Date.now(),
+        })
+    );
+}
+
+function restoreResultsState() {
+    const raw = sessionStorage.getItem(RESULTS_STORAGE_KEY);
+    if (!raw) {
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.report) {
+            return;
+        }
+        reconciliationReport = parsed.report;
+        renderResults(reconciliationReport);
+        dom.resultsSection.classList.remove('hidden');
+    } catch (error) {
+        sessionStorage.removeItem(RESULTS_STORAGE_KEY);
+    }
 }
 
 function clampTolerance(value) {
@@ -998,9 +1034,16 @@ function reconcile(transactions, settlements) {
     const matched = [];
     const crossMonth = [];
     const amountMismatches = [];
-    let aggregateExpectedTotal = 0;
-    let aggregateActualTotal = 0;
-    let aggregatePairsCompared = 0;
+    
+    // Variance calculation: for ALL matched IDs (IDs found in both datasets)
+    let varianceExpectedTotal = 0;
+    let varianceActualTotal = 0;
+    let variancePairsCount = 0;
+    
+    // Separate tracking for "clean matched" (same month, within tolerance)
+    let cleanMatchedExpected = 0;
+    let cleanMatchedActual = 0;
+    let cleanMatchedCount = 0;
     let toleratedRoundingRows = 0;
 
     stlIds.forEach((transactionId) => {
@@ -1034,7 +1077,10 @@ function reconcile(transactions, settlements) {
         const settlement = stlMap[transactionId];
         const expectedAmount = Number(transaction.net_amount);
         const actualAmount = Number(settlement.settlement_amount);
-        const difference = Math.round(Math.abs(expectedAmount - actualAmount) * 100) / 100;
+        // Signed difference: positive = platform expected more (SHORT), negative = bank paid more (OVER)
+        const signedDiff = Math.round((expectedAmount - actualAmount) * 100) / 100;
+        const difference = signedDiff; // Keep signed for display
+        const absDifference = Math.abs(signedDiff); // Absolute for tolerance check
         const isCrossMonth = transaction.transaction_date.slice(0, 7) !== settlement.settlement_date.slice(0, 7);
 
         const record = {
@@ -1050,24 +1096,34 @@ function reconcile(transactions, settlements) {
             utr: settlement.utr,
         };
 
+        // Add to variance totals for ALL matched IDs
+        varianceExpectedTotal += expectedAmount;
+        varianceActualTotal += actualAmount;
+        variancePairsCount += 1;
+
         if (isCrossMonth) {
             crossMonth.push(record);
-        } else if (difference > rowMismatchTolerance) {
+        } else if (absDifference > rowMismatchTolerance) {
             amountMismatches.push(record);
         } else {
             matched.push(record);
-            aggregateExpectedTotal += expectedAmount;
-            aggregateActualTotal += actualAmount;
-            aggregatePairsCompared += 1;
-            if (difference > 0 && difference <= rowMismatchTolerance) {
+            cleanMatchedExpected += expectedAmount;
+            cleanMatchedActual += actualAmount;
+            cleanMatchedCount += 1;
+            if (absDifference > 0 && absDifference <= rowMismatchTolerance) {
                 toleratedRoundingRows += 1;
             }
         }
     });
 
-    aggregateExpectedTotal = Math.round(aggregateExpectedTotal * 100) / 100;
-    aggregateActualTotal = Math.round(aggregateActualTotal * 100) / 100;
-    const aggregateRoundingGap = Math.round((aggregateExpectedTotal - aggregateActualTotal) * 100) / 100;
+    // Round all totals
+    varianceExpectedTotal = Math.round(varianceExpectedTotal * 100) / 100;
+    varianceActualTotal = Math.round(varianceActualTotal * 100) / 100;
+    const totalVariance = Math.round((varianceExpectedTotal - varianceActualTotal) * 100) / 100;
+    
+    cleanMatchedExpected = Math.round(cleanMatchedExpected * 100) / 100;
+    cleanMatchedActual = Math.round(cleanMatchedActual * 100) / 100;
+    const cleanMatchedVariance = Math.round((cleanMatchedExpected - cleanMatchedActual) * 100) / 100;
 
     return {
         summary: {
@@ -1081,11 +1137,17 @@ function reconcile(transactions, settlements) {
             missing_settlements: missingSettlements.length,
             orphan_refunds: orphanRefunds.length,
             row_mismatch_tolerance: rowMismatchTolerance,
-            aggregate_pairs_compared: aggregatePairsCompared,
+            // Variance for ALL matched IDs
+            variance_pairs_count: variancePairsCount,
+            variance_expected_amount: varianceExpectedTotal,
+            variance_actual_amount: varianceActualTotal,
+            total_variance: totalVariance,
+            // Clean matched subset (same month, within tolerance)
+            clean_matched_count: cleanMatchedCount,
+            clean_matched_expected: cleanMatchedExpected,
+            clean_matched_actual: cleanMatchedActual,
+            clean_matched_variance: cleanMatchedVariance,
             tolerated_rounding_rows: toleratedRoundingRows,
-            aggregate_expected_amount: aggregateExpectedTotal,
-            aggregate_actual_amount: aggregateActualTotal,
-            aggregate_rounding_gap: aggregateRoundingGap,
         },
         discrepancies: {
             cross_month: crossMonth,
@@ -1093,10 +1155,12 @@ function reconcile(transactions, settlements) {
             duplicates,
             orphan_refunds: orphanRefunds,
             missing_settlements: missingSettlements,
-            aggregate_rounding: {
-                expected_total: aggregateExpectedTotal,
-                actual_total: aggregateActualTotal,
-                gap: aggregateRoundingGap,
+            variance_breakdown: {
+                total_matched_ids: variancePairsCount,
+                expected_total: varianceExpectedTotal,
+                actual_total: varianceActualTotal,
+                total_variance: totalVariance,
+                clean_matched_variance: cleanMatchedVariance,
                 rows_with_tolerated_rounding: toleratedRoundingRows,
                 row_tolerance: rowMismatchTolerance,
             },
@@ -1110,14 +1174,14 @@ function statusPillHtml(status) {
         MATCHED: 'Matched',
         CROSS_MONTH: 'Cross-Month',
         AMOUNT_MISMATCH: 'Mismatch',
-        MISSING_SETTLEMENT: 'Missing',
+        MISSING_SETTLEMENT: 'Orphan',
         ORPHAN_REFUND: 'Orphan',
     };
     const classes = {
         MATCHED: 'matched',
         CROSS_MONTH: 'cross-month',
         AMOUNT_MISMATCH: 'mismatch',
-        MISSING_SETTLEMENT: 'mismatch',
+        MISSING_SETTLEMENT: 'orphan',
         ORPHAN_REFUND: 'orphan',
     };
     return `<span class="status-pill ${classes[status] || ''}">${labels[status] || status}</span>`;
@@ -1134,17 +1198,28 @@ function diffHtml(value) {
     if (!value || value === 0) {
         return '<span class="diff-zero">0.00</span>';
     }
-    return `<span class="diff-positive">${escapeHtml(formatAmount(value))}</span>`;
+    const absValue = Math.abs(value);
+    const formatted = absValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Positive = Expected > Actual (SHORT - bank paid less)
+    // Negative = Expected < Actual (OVER - bank paid more)
+    if (value > 0) {
+        return `<span class="diff-short">+${escapeHtml(formatted)}</span>`;
+    } else {
+        return `<span class="diff-over">−${escapeHtml(formatted)}</span>`;
+    }
 }
 
 function renderEmptyState(tbody, colSpan, message) {
     tbody.innerHTML = `<tr><td class="table-empty" colspan="${colSpan}">${escapeHtml(message)}</td></tr>`;
 }
 
-function renderAllTable(rows) {
+function renderAllTable(rows, searchQuery = '') {
     const tbody = document.querySelector('#table-all tbody');
     if (!rows.length) {
-        renderEmptyState(tbody, 9, 'No rows to display.');
+        const message = searchQuery 
+            ? `No results found for "${searchQuery}"` 
+            : 'No rows to display.';
+        renderEmptyState(tbody, 9, message);
         return;
     }
 
@@ -1222,19 +1297,24 @@ function renderDuplicatesTable(rows) {
     `).join('');
 }
 
-function renderOrphansTable(rows) {
+function renderOrphansTable(orphanRefunds, missingSettlements) {
     const tbody = document.querySelector('#table-orphans tbody');
-    if (!rows.length) {
-        renderEmptyState(tbody, 6, 'No orphan settlements found.');
+    const allOrphans = [
+        ...(orphanRefunds || []).map(row => ({ ...row, orphan_type: 'Bank Orphan' })),
+        ...(missingSettlements || []).map(row => ({ ...row, orphan_type: 'Missing Settlement' })),
+    ];
+    
+    if (!allOrphans.length) {
+        renderEmptyState(tbody, 6, 'No orphan rows found.');
         return;
     }
 
-    tbody.innerHTML = rows.map((row) => `
+    tbody.innerHTML = allOrphans.map((row) => `
         <tr>
-            <td>${escapeHtml(row.settlement_id || '-')}</td>
-            <td>${escapeHtml(row.transaction_id)}</td>
-            <td>${escapeHtml(formatAmount(row.settlement_amount))}</td>
-            <td>${escapeHtml(row.settlement_date)}</td>
+            <td><span class="status-pill ${row.orphan_type === 'Bank Orphan' ? 'orphan' : 'missing-orphan'}">${escapeHtml(row.orphan_type)}</span></td>
+            <td>${escapeHtml(row.transaction_id || '-')}</td>
+            <td>${escapeHtml(formatAmount(row.settlement_amount ?? row.net_amount ?? 0))}</td>
+            <td>${escapeHtml(row.settlement_date || row.transaction_date || '-')}</td>
             <td>${escapeHtml(row.utr || '-')}</td>
             <td>${escapeHtml(row.bank_reference || '-')}</td>
         </tr>
@@ -1264,31 +1344,99 @@ function renderResults(report) {
     animateCount('card-cross-month', report.summary.cross_month);
     animateCount('card-mismatch', report.summary.amount_mismatches);
     animateCount('card-duplicates', report.summary.duplicates_in_transactions + report.summary.duplicates_in_settlements);
-    animateCount('card-orphans', report.summary.orphan_refunds);
+    animateCount('card-orphans', report.summary.orphan_refunds + report.summary.missing_settlements);
 
-    const gap = Number(report.summary.aggregate_rounding_gap || 0);
+    // Reconciliation Variance (ALL Matched IDs - IDs that exist in both datasets)
+    const expectedTotal = Number(report.summary.variance_expected_amount || 0);
+    const actualTotal = Number(report.summary.variance_actual_amount || 0);
+    const variance = Number(report.summary.total_variance || 0);
+    const varianceSign = variance > 0 ? 'SHORT' : variance < 0 ? 'OVER' : 'BALANCED';
+    const varianceClass = variance === 0 ? 'variance-balanced' : (variance > 0 ? 'variance-short' : 'variance-over');
+    const matchedPairs = Number(report.summary.variance_pairs_count || 0);
     const toleratedRows = Number(report.summary.tolerated_rounding_rows || 0);
-    const tolerance = Number(report.summary.row_mismatch_tolerance || 0);
-    const expectedTotal = Number(report.summary.aggregate_expected_amount || 0);
-    const actualTotal = Number(report.summary.aggregate_actual_amount || 0);
-    if (gap !== 0 || toleratedRows > 0) {
-        const directionText = gap > 0
-            ? 'Platform expected total is higher than bank actual total.'
-            : (gap < 0
-                ? 'Bank actual total is higher than platform expected total.'
-                : 'Platform and bank totals are equal.');
-        const toleranceText = toleratedRows > 0
-            ? `${toleratedRows} row(s) were within your tolerance (₹${formatAmount(tolerance)}), so they were not marked as mismatches.`
-            : 'No rows were absorbed by tolerance in this run.';
-        dom.aggregateRoundingNote.textContent = `Rounding summary: totals differ by ₹${formatAmount(Math.abs(gap))}. ${directionText}
-Platform total: ₹${formatAmount(expectedTotal)} | Bank total: ₹${formatAmount(actualTotal)}
-${toleranceText}
-If you want stricter results, lower tolerance and run reconciliation again.`;
-        dom.aggregateRoundingNote.classList.remove('hidden');
-    } else {
-        dom.aggregateRoundingNote.classList.add('hidden');
-        dom.aggregateRoundingNote.textContent = '';
-    }
+    const rowTolerance = Number(report.discrepancies?.variance_breakdown?.row_tolerance ?? rowMismatchTolerance);
+
+    // Amount mismatch totals - sum of signed differences and absolute differences
+    const mismatchNetFromRows = Array.isArray(report.discrepancies?.amount_mismatches)
+        ? report.discrepancies.amount_mismatches.reduce((sum, row) => sum + Number(row.difference || 0), 0)
+        : 0;
+    const mismatchAbsFromRows = Array.isArray(report.discrepancies?.amount_mismatches)
+        ? report.discrepancies.amount_mismatches.reduce((sum, row) => sum + Math.abs(Number(row.difference || 0)), 0)
+        : 0;
+    const mismatchNet = Math.round(mismatchNetFromRows * 100) / 100;
+    const mismatchAbs = Math.round(mismatchAbsFromRows * 100) / 100;
+    const mismatchCount = Number(report.summary.amount_mismatches || 0);
+
+    // Cross-month totals (for breakdown - these ARE included in variance now)
+    const crossMonthTotal = Array.isArray(report.discrepancies?.cross_month)
+        ? report.discrepancies.cross_month.reduce((sum, row) => sum + Number(row.expected_amount || 0), 0)
+        : 0;
+    const crossMonthDiff = Array.isArray(report.discrepancies?.cross_month)
+        ? report.discrepancies.cross_month.reduce((sum, row) => sum + Number(row.difference || 0), 0)
+        : 0;
+    
+    // Orphan totals (NOT in variance - IDs don't match)
+    const orphanTotal = Array.isArray(report.discrepancies?.orphan_refunds)
+        ? report.discrepancies.orphan_refunds.reduce((sum, row) => sum + Number(row.settlement_amount || 0), 0)
+        : 0;
+
+    // Total absolute differences across all matched (to show magnitude of errors)
+    const allMatchedRows = [
+        ...(report.matched || []),
+        ...(report.discrepancies?.cross_month || []),
+        ...(report.discrepancies?.amount_mismatches || []),
+    ];
+    const totalAbsDiff = Math.round(allMatchedRows.reduce((sum, row) => sum + Math.abs(Number(row.difference || 0)), 0) * 100) / 100;
+
+    dom.aggregateRoundingNote.innerHTML = `
+        <div class="variance-section">
+            <div class="variance-header">
+                <strong>💰 RECONCILIATION VARIANCE</strong>
+                <span class="variance-scope">(All Matched IDs: transactions found in BOTH datasets)</span>
+            </div>
+            <div class="variance-grid">
+                <div class="variance-row">
+                    <span class="variance-label">Matched ID Pairs:</span>
+                    <span class="variance-value"><strong>${matchedPairs}</strong> transactions</span>
+                </div>
+                <div class="variance-row">
+                    <span class="variance-label">Expected Amount (Platform):</span>
+                    <span class="variance-value">₹${formatAmount(expectedTotal)}</span>
+                </div>
+                <div class="variance-row">
+                    <span class="variance-label">Actual Amount (Bank):</span>
+                    <span class="variance-value">₹${formatAmount(actualTotal)}</span>
+                </div>
+                <div class="variance-row variance-total ${varianceClass}">
+                    <span class="variance-label"><strong>NET VARIANCE:</strong></span>
+                    <span class="variance-value"><strong>${variance >= 0 ? '+' : ''}₹${formatAmount(variance)} ${varianceSign}</strong></span>
+                </div>
+                <div class="variance-row">
+                    <span class="variance-label">Total Absolute Differences:</span>
+                    <span class="variance-value">₹${formatAmount(totalAbsDiff)} <small>(sum of all |differences|)</small></span>
+                </div>
+            </div>
+            <div class="variance-details">
+                <span>Clean Matched: <strong>${report.summary.matched}</strong> txns</span>
+                <span>Cross-Month: <strong>${report.summary.cross_month}</strong> txns</span>
+                <span>Amount Mismatches: <strong>${mismatchCount}</strong> txns (net: ${mismatchNet >= 0 ? '+' : ''}₹${formatAmount(mismatchNet)})</span>
+                <span>Tolerated Rounding: <strong>${toleratedRows}</strong> rows (≤₹${formatAmount(rowTolerance)} each)</span>
+            </div>
+            <div class="diff-legend">
+                <span class="diff-legend-item"><span class="diff-short">+</span> = SHORT (bank paid less than expected)</span>
+                <span class="diff-legend-item"><span class="diff-over">−</span> = OVER (bank paid more than expected)</span>
+            </div>
+        </div>
+        <div class="excluded-section">
+            <div class="excluded-header"><strong>ℹ️ NOT Included in Variance (IDs not matched):</strong></div>
+            <div class="excluded-items">
+                <span>Orphan Refunds: ${report.summary.orphan_refunds} rows (₹${formatAmount(orphanTotal)})</span>
+                <span>Missing Settlements: ${report.summary.missing_settlements} txns</span>
+                <span>Duplicates: ${report.summary.duplicates_in_transactions + report.summary.duplicates_in_settlements} entries</span>
+            </div>
+        </div>
+    `;
+    dom.aggregateRoundingNote.classList.remove('hidden');
 
     const allTransactions = [];
     report.matched.forEach((row) => allTransactions.push({ ...row, status: 'MATCHED' }));
@@ -1324,7 +1472,7 @@ If you want stricter results, lower tolerance and run reconciliation again.`;
     renderCrossMonthTable(report.discrepancies.cross_month);
     renderMismatchTable(report.discrepancies.amount_mismatches);
     renderDuplicatesTable(report.discrepancies.duplicates);
-    renderOrphansTable(report.discrepancies.orphan_refunds);
+    renderOrphansTable(report.discrepancies.orphan_refunds, report.discrepancies.missing_settlements);
     window._allTxns = allTransactions;
 }
 
@@ -1341,6 +1489,7 @@ dom.btnReconcile.addEventListener('click', () => {
         try {
             reconciliationReport = reconcile(txnData, stlData);
             renderResults(reconciliationReport);
+            persistResultsState();
             dom.resultsSection.classList.remove('hidden');
             dom.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (error) {
@@ -1381,10 +1530,12 @@ dom.searchInput.addEventListener('input', (event) => {
             || String(row.order_id || '').toLowerCase().includes(query)
             || String(row.merchant_id || '').toLowerCase().includes(query)
             || String(row.payment_method || '').toLowerCase().includes(query)
+            || String(row.utr || '').toLowerCase().includes(query)
+            || String(row.status || '').toLowerCase().includes(query)
         )
         : window._allTxns;
 
-    renderAllTable(filtered);
+    renderAllTable(filtered, query);
 });
 
 dom.rowToleranceInput.addEventListener('change', () => {
@@ -1432,5 +1583,7 @@ document.querySelector('#table-all thead').addEventListener('click', (event) => 
 });
 
 applyToleranceSettingFromInput();
+restoreResultsState();
 updateReadyState();
+
 

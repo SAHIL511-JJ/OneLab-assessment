@@ -1,22 +1,26 @@
 {
   "summary": {
-    "total_transactions": 310,
-    "total_settlements": 310,
-    "unique_transaction_ids": 308,
-    "unique_settlement_ids": 310,
+    "total_transactions": 318,
+    "total_settlements": 318,
+    "unique_transaction_ids": 316,
+    "unique_settlement_ids": 318,
     "matched": 293,
     "cross_month": 15,
-    "amount_mismatches": 0,
+    "amount_mismatches": 8,
     "duplicates_in_transactions": 2,
     "duplicates_in_settlements": 0,
     "missing_settlements": 0,
     "orphan_refunds": 2,
     "row_mismatch_tolerance": 0.02,
-    "aggregate_pairs_compared": 293,
-    "tolerated_rounding_rows": 5,
-    "aggregate_expected_amount": 1025281.29,
-    "aggregate_actual_amount": 1025281.24,
-    "aggregate_rounding_gap": 0.05
+    "variance_pairs_count": 316,
+    "variance_expected_amount": 1099988.56,
+    "variance_actual_amount": 1099996.51,
+    "total_variance": -7.95,
+    "clean_matched_count": 293,
+    "clean_matched_expected": 1025281.29,
+    "clean_matched_actual": 1025281.24,
+    "clean_matched_variance": 0.05,
+    "tolerated_rounding_rows": 5
   },
   "discrepancies": {
     "cross_month": [
@@ -201,7 +205,104 @@
         "utr": "UTRN20250403VLHYL2LD"
       }
     ],
-    "amount_mismatches": [],
+    "amount_mismatches": [
+      {
+        "transaction_id": "TXN_20250305_0309",
+        "transaction_date": "2025-03-05 10:30:00",
+        "settlement_date": "2025-03-06",
+        "expected_amount": 1464.6,
+        "actual_amount": 1461.1,
+        "difference": 3.5,
+        "payment_method": "UPI",
+        "merchant_id": "MERCH_013",
+        "order_id": "ORD_MISMATCH_001",
+        "utr": "UTRN202503066LBPJ8T2"
+      },
+      {
+        "transaction_id": "TXN_20250308_0310",
+        "transaction_date": "2025-03-08 11:30:00",
+        "settlement_date": "2025-03-10",
+        "expected_amount": 2733.92,
+        "actual_amount": 2738.12,
+        "difference": -4.2,
+        "payment_method": "Wallet",
+        "merchant_id": "MERCH_012",
+        "order_id": "ORD_MISMATCH_002",
+        "utr": "UTRN202503105DNWNGUC"
+      },
+      {
+        "transaction_id": "TXN_20250311_0311",
+        "transaction_date": "2025-03-11 12:30:00",
+        "settlement_date": "2025-03-13",
+        "expected_amount": 927.58,
+        "actual_amount": 924.83,
+        "difference": 2.75,
+        "payment_method": "Credit Card",
+        "merchant_id": "MERCH_018",
+        "order_id": "ORD_MISMATCH_003",
+        "utr": "UTRN20250313ER7U8H0I"
+      },
+      {
+        "transaction_id": "TXN_20250314_0312",
+        "transaction_date": "2025-03-14 13:30:00",
+        "settlement_date": "2025-03-17",
+        "expected_amount": 4100.88,
+        "actual_amount": 4105.88,
+        "difference": -5.0,
+        "payment_method": "Debit Card",
+        "merchant_id": "MERCH_002",
+        "order_id": "ORD_MISMATCH_004",
+        "utr": "UTRN20250317CMRSEZYT"
+      },
+      {
+        "transaction_id": "TXN_20250317_0313",
+        "transaction_date": "2025-03-17 14:30:00",
+        "settlement_date": "2025-03-19",
+        "expected_amount": 1708.7,
+        "actual_amount": 1705.7,
+        "difference": 3.0,
+        "payment_method": "UPI",
+        "merchant_id": "MERCH_007",
+        "order_id": "ORD_MISMATCH_005",
+        "utr": "UTRN202503196QC6K8DJ"
+      },
+      {
+        "transaction_id": "TXN_20250320_0314",
+        "transaction_date": "2025-03-20 15:30:00",
+        "settlement_date": "2025-03-21",
+        "expected_amount": 3026.84,
+        "actual_amount": 3030.64,
+        "difference": -3.8,
+        "payment_method": "Credit Card",
+        "merchant_id": "MERCH_017",
+        "order_id": "ORD_MISMATCH_006",
+        "utr": "UTRN202503218AOY7RP0"
+      },
+      {
+        "transaction_id": "TXN_20250323_0315",
+        "transaction_date": "2025-03-23 16:30:00",
+        "settlement_date": "2025-03-24",
+        "expected_amount": 805.53,
+        "actual_amount": 803.28,
+        "difference": 2.25,
+        "payment_method": "UPI",
+        "merchant_id": "MERCH_001",
+        "order_id": "ORD_MISMATCH_007",
+        "utr": "UTRN202503245I8XOMXL"
+      },
+      {
+        "transaction_id": "TXN_20250326_0316",
+        "transaction_date": "2025-03-26 17:30:00",
+        "settlement_date": "2025-03-28",
+        "expected_amount": 5370.2,
+        "actual_amount": 5376.7,
+        "difference": -6.5,
+        "payment_method": "NetBanking",
+        "merchant_id": "MERCH_010",
+        "order_id": "ORD_MISMATCH_008",
+        "utr": "UTRN20250328U6L2INK4"
+      }
+    ],
     "duplicates": [
       {
         "transaction_id": "TXN_20250317_0011",
@@ -276,27 +377,29 @@
     ],
     "orphan_refunds": [
       {
-        "settlement_id": "STL_20250318_309",
+        "settlement_id": "STL_20250318_317",
         "transaction_id": "TXN_20250315_9001",
-        "settlement_amount": -2170.93,
+        "settlement_amount": -996.27,
         "settlement_date": "2025-03-18",
-        "utr": "UTRN20250318AWNYTK1Z",
-        "bank_reference": "KOTAK/2025/0318/9887"
+        "utr": "UTRN202503188WFTGGZ6",
+        "bank_reference": "ICICI/2025/0318/3641"
       },
       {
-        "settlement_id": "STL_20250319_310",
+        "settlement_id": "STL_20250319_318",
         "transaction_id": "TXN_20250315_9002",
-        "settlement_amount": -1810.64,
+        "settlement_amount": -866.13,
         "settlement_date": "2025-03-19",
-        "utr": "UTRN20250319HYWM7S6N",
-        "bank_reference": "HDFC/2025/0319/2818"
+        "utr": "UTRN20250319BLEJGUBL",
+        "bank_reference": "SBI/2025/0319/3423"
       }
     ],
     "missing_settlements": [],
-    "aggregate_rounding": {
-      "expected_total": 1025281.29,
-      "actual_total": 1025281.24,
-      "gap": 0.05,
+    "variance_breakdown": {
+      "total_matched_ids": 316,
+      "expected_total": 1099988.56,
+      "actual_total": 1099996.51,
+      "total_variance": -7.95,
+      "clean_matched_variance": 0.05,
       "rows_with_tolerated_rounding": 5,
       "row_tolerance": 0.02
     }
@@ -966,6 +1069,19 @@
       "status": "MATCHED"
     },
     {
+      "transaction_id": "TXN_20250305_0309",
+      "transaction_date": "2025-03-05 10:30:00",
+      "settlement_date": "2025-03-06",
+      "expected_amount": 1464.6,
+      "actual_amount": 1461.1,
+      "difference": 3.5,
+      "payment_method": "UPI",
+      "merchant_id": "MERCH_013",
+      "order_id": "ORD_MISMATCH_001",
+      "utr": "UTRN202503066LBPJ8T2",
+      "status": "AMOUNT_MISMATCH"
+    },
+    {
       "transaction_id": "TXN_20250305_0008",
       "transaction_date": "2025-03-05 11:47:36",
       "settlement_date": "2025-03-06",
@@ -1421,6 +1537,19 @@
       "status": "MATCHED"
     },
     {
+      "transaction_id": "TXN_20250308_0310",
+      "transaction_date": "2025-03-08 11:30:00",
+      "settlement_date": "2025-03-10",
+      "expected_amount": 2733.92,
+      "actual_amount": 2738.12,
+      "difference": -4.2,
+      "payment_method": "Wallet",
+      "merchant_id": "MERCH_012",
+      "order_id": "ORD_MISMATCH_002",
+      "utr": "UTRN202503105DNWNGUC",
+      "status": "AMOUNT_MISMATCH"
+    },
+    {
       "transaction_id": "TXN_20250308_0108",
       "transaction_date": "2025-03-08 13:51:04",
       "settlement_date": "2025-03-10",
@@ -1744,6 +1873,19 @@
       "order_id": "ORD_74169",
       "utr": "UTRN20250313PRAT0861",
       "status": "MATCHED"
+    },
+    {
+      "transaction_id": "TXN_20250311_0311",
+      "transaction_date": "2025-03-11 12:30:00",
+      "settlement_date": "2025-03-13",
+      "expected_amount": 927.58,
+      "actual_amount": 924.83,
+      "difference": 2.75,
+      "payment_method": "Credit Card",
+      "merchant_id": "MERCH_018",
+      "order_id": "ORD_MISMATCH_003",
+      "utr": "UTRN20250313ER7U8H0I",
+      "status": "AMOUNT_MISMATCH"
     },
     {
       "transaction_id": "TXN_20250311_0055",
@@ -2110,6 +2252,19 @@
       "status": "MATCHED"
     },
     {
+      "transaction_id": "TXN_20250314_0312",
+      "transaction_date": "2025-03-14 13:30:00",
+      "settlement_date": "2025-03-17",
+      "expected_amount": 4100.88,
+      "actual_amount": 4105.88,
+      "difference": -5.0,
+      "payment_method": "Debit Card",
+      "merchant_id": "MERCH_002",
+      "order_id": "ORD_MISMATCH_004",
+      "utr": "UTRN20250317CMRSEZYT",
+      "status": "AMOUNT_MISMATCH"
+    },
+    {
       "transaction_id": "TXN_20250314_0033",
       "transaction_date": "2025-03-14 21:49:32",
       "settlement_date": "2025-03-17",
@@ -2396,6 +2551,19 @@
       "status": "MATCHED"
     },
     {
+      "transaction_id": "TXN_20250317_0313",
+      "transaction_date": "2025-03-17 14:30:00",
+      "settlement_date": "2025-03-19",
+      "expected_amount": 1708.7,
+      "actual_amount": 1705.7,
+      "difference": 3.0,
+      "payment_method": "UPI",
+      "merchant_id": "MERCH_007",
+      "order_id": "ORD_MISMATCH_005",
+      "utr": "UTRN202503196QC6K8DJ",
+      "status": "AMOUNT_MISMATCH"
+    },
+    {
       "transaction_id": "TXN_20250317_0026",
       "transaction_date": "2025-03-17 15:17:26",
       "settlement_date": "2025-03-18",
@@ -2448,12 +2616,12 @@
       "status": "MATCHED"
     },
     {
-      "settlement_id": "STL_20250318_309",
+      "settlement_id": "STL_20250318_317",
       "transaction_id": "TXN_20250315_9001",
-      "settlement_amount": -2170.93,
+      "settlement_amount": -996.27,
       "settlement_date": "2025-03-18",
-      "utr": "UTRN20250318AWNYTK1Z",
-      "bank_reference": "KOTAK/2025/0318/9887",
+      "utr": "UTRN202503188WFTGGZ6",
+      "bank_reference": "ICICI/2025/0318/3641",
       "status": "ORPHAN_REFUND"
     },
     {
@@ -2613,12 +2781,12 @@
       "status": "MATCHED"
     },
     {
-      "settlement_id": "STL_20250319_310",
+      "settlement_id": "STL_20250319_318",
       "transaction_id": "TXN_20250315_9002",
-      "settlement_amount": -1810.64,
+      "settlement_amount": -866.13,
       "settlement_date": "2025-03-19",
-      "utr": "UTRN20250319HYWM7S6N",
-      "bank_reference": "HDFC/2025/0319/2818",
+      "utr": "UTRN20250319BLEJGUBL",
+      "bank_reference": "SBI/2025/0319/3423",
       "status": "ORPHAN_REFUND"
     },
     {
@@ -2867,6 +3035,19 @@
       "order_id": "ORD_44734",
       "utr": "UTRN20250324NQJQIJC1",
       "status": "MATCHED"
+    },
+    {
+      "transaction_id": "TXN_20250320_0314",
+      "transaction_date": "2025-03-20 15:30:00",
+      "settlement_date": "2025-03-21",
+      "expected_amount": 3026.84,
+      "actual_amount": 3030.64,
+      "difference": -3.8,
+      "payment_method": "Credit Card",
+      "merchant_id": "MERCH_017",
+      "order_id": "ORD_MISMATCH_006",
+      "utr": "UTRN202503218AOY7RP0",
+      "status": "AMOUNT_MISMATCH"
     },
     {
       "transaction_id": "TXN_20250320_0024",
@@ -3298,6 +3479,19 @@
       "status": "MATCHED"
     },
     {
+      "transaction_id": "TXN_20250323_0315",
+      "transaction_date": "2025-03-23 16:30:00",
+      "settlement_date": "2025-03-24",
+      "expected_amount": 805.53,
+      "actual_amount": 803.28,
+      "difference": 2.25,
+      "payment_method": "UPI",
+      "merchant_id": "MERCH_001",
+      "order_id": "ORD_MISMATCH_007",
+      "utr": "UTRN202503245I8XOMXL",
+      "status": "AMOUNT_MISMATCH"
+    },
+    {
       "transaction_id": "TXN_20250323_0112",
       "transaction_date": "2025-03-23 16:54:16",
       "settlement_date": "2025-03-24",
@@ -3660,6 +3854,19 @@
       "order_id": "ORD_65640",
       "utr": "UTRN20250328LCXLVPYM",
       "status": "MATCHED"
+    },
+    {
+      "transaction_id": "TXN_20250326_0316",
+      "transaction_date": "2025-03-26 17:30:00",
+      "settlement_date": "2025-03-28",
+      "expected_amount": 5370.2,
+      "actual_amount": 5376.7,
+      "difference": -6.5,
+      "payment_method": "NetBanking",
+      "merchant_id": "MERCH_010",
+      "order_id": "ORD_MISMATCH_008",
+      "utr": "UTRN20250328U6L2INK4",
+      "status": "AMOUNT_MISMATCH"
     },
     {
       "transaction_id": "TXN_20250326_0264",

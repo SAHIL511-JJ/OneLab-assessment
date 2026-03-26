@@ -249,6 +249,65 @@ def generate():
         duplicate_txn_ids.append(dup["transaction_id"])
         transactions.append(dup)
 
+    # ── 5. Plant Gap Type 5: Larger Amount Mismatches (bidirectional) ──────
+    # Add transactions with significant differences - some bank pays MORE, some LESS
+    mismatch_configs = [
+        # (expected, actual_offset, description) - positive offset = bank pays LESS (SHORT)
+        (1500.00, +3.50, "UPI fee discrepancy - bank paid less"),
+        (2800.00, -4.20, "Credit card chargeback partial - bank paid more"),
+        (950.00, +2.75, "Rounding on forex conversion - bank paid less"),
+        (4200.00, -5.00, "Promotional credit applied by bank - bank paid more"),
+        (1750.00, +3.00, "Processing fee deducted - bank paid less"),
+        (3100.00, -3.80, "Interest adjustment - bank paid more"),
+        (825.00, +2.25, "Tax withholding difference - bank paid less"),
+        (5500.00, -6.50, "Cashback reversal credit - bank paid more"),
+    ]
+    
+    mismatch_txn_ids = []
+    for i, (expected_amt, offset, desc) in enumerate(mismatch_configs):
+        txn_counter += 1
+        stl_counter += 1
+        
+        # Create transaction date spread across the month
+        txn_date = datetime(2025, 3, 5 + i * 3, 10 + i, 30, 0)
+        settle_date = settlement_date_for(txn_date)
+        
+        txn_id = generate_txn_id(txn_counter, txn_date)
+        mismatch_txn_ids.append(txn_id)
+        
+        # Calculate amounts
+        fee = round(expected_amt * 0.02, 2)
+        tax = round(fee * 0.18, 2)
+        net_amount = round(expected_amt - fee - tax, 2)
+        actual_amount = round(net_amount - offset, 2)  # offset applied to get actual
+        
+        txn = {
+            "transaction_id": txn_id,
+            "order_id": f"ORD_MISMATCH_{i+1:03d}",
+            "transaction_date": txn_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "amount": f"{expected_amt:.2f}",
+            "currency": "INR",
+            "payment_method": random.choice(PAYMENT_METHODS),
+            "status": "SUCCESS",
+            "customer_email": f"mismatch_user_{i+1}@test.com",
+            "merchant_id": random.choice(MERCHANT_IDS),
+            "fee": f"{fee:.2f}",
+            "tax": f"{tax:.2f}",
+            "net_amount": f"{net_amount:.2f}",
+        }
+        transactions.append(txn)
+        
+        stl = {
+            "settlement_id": generate_settlement_id(stl_counter, settle_date),
+            "transaction_id": txn_id,
+            "utr": generate_utr(settle_date),
+            "settlement_date": str(settle_date),
+            "settlement_amount": f"{actual_amount:.2f}",
+            "bank_reference": generate_bank_ref(settle_date),
+            "status": "SETTLED",
+        }
+        settlements.append(stl)
+
     # ── 5. Plant Gap Type 4: Orphan Refunds ─────────────────────────
     # 2 refund entries in bank settlements that reference non-existent transactions
     orphan_refund_ids = []
@@ -311,6 +370,7 @@ def generate():
         f"aggregate drift: {ROUNDING_DRIFT_PER_ROW * len(rounding_txn_ids):.2f})"
     )
     print(f"    Duplicates     : 2  (IDs: {duplicate_txn_ids})")
+    print(f"    Amt Mismatches : 8  (IDs: {mismatch_txn_ids})")
     print()
     print(f"  Settlements CSV  : {stl_path}")
     print(f"    Total rows     : {len(settlements)}")

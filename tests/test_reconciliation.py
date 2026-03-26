@@ -1,6 +1,6 @@
 """
 Test Cases for Payment Reconciliation Engine
-Verifies all 4 planted gap types are correctly detected.
+Verifies all planted gap types are correctly detected.
 
 Run with: pytest tests/test_reconciliation.py -v
 """
@@ -85,12 +85,12 @@ class TestDataGeneration:
         assert expected.issubset(actual), f"Missing columns: {expected - actual}"
 
     def test_transactions_row_count(self, transactions):
-        # 300 normal + 3 cross-month + 5 rounding + 2 duplicates = 310
-        assert len(transactions) == 310, f"Expected 310 rows, got {len(transactions)}"
+        # 300 normal + 3 cross-month + 5 rounding + 2 duplicates + 8 amount mismatches = 318
+        assert len(transactions) == 318, f"Expected 318 rows, got {len(transactions)}"
 
     def test_settlements_row_count(self, settlements):
-        # 300 normal + 3 cross-month + 5 rounding + 2 orphan refunds = 310
-        assert len(settlements) == 310, f"Expected 310 rows, got {len(settlements)}"
+        # 300 normal + 3 cross-month + 5 rounding + 8 amount mismatches + 2 orphan refunds = 318
+        assert len(settlements) == 318, f"Expected 318 rows, got {len(settlements)}"
 
     def test_all_amounts_are_valid(self, transactions):
         for txn in transactions:
@@ -129,26 +129,43 @@ class TestCrossMonthDetection:
         )
 
 
-# ── Test 3: Aggregate-Only Rounding Gap Detected ────────────────────
+# ── Test 3: Variance Calculation ────────────────────────────────────
 
-class TestRoundingErrors:
-    def test_rounding_rows_not_counted_as_row_mismatch(self, report):
+class TestVarianceCalculation:
+    def test_amount_mismatches_detected(self, report):
+        """8 planted amount mismatches should be detected."""
         count = report["summary"]["amount_mismatches"]
-        assert count == 0, f"Expected 0 row-level amount mismatches, found {count}"
+        assert count == 8, f"Expected 8 row-level amount mismatches, found {count}"
 
     def test_tolerated_rounding_rows_count(self, report):
         count = report["summary"]["tolerated_rounding_rows"]
         assert count == 5, f"Expected 5 tolerated rounding rows, found {count}"
 
-    def test_aggregate_rounding_gap_exists(self, report):
-        gap = report["summary"]["aggregate_rounding_gap"]
-        assert gap != 0, "Expected non-zero aggregate rounding gap"
-        assert round(abs(gap), 2) == 0.05, f"Expected aggregate gap of 0.05, found {gap}"
+    def test_total_variance_exists(self, report):
+        """Total variance should be non-zero due to mismatches and rounding."""
+        variance = report["summary"]["total_variance"]
+        assert variance != 0, "Expected non-zero total variance"
 
-    def test_aggregate_rounding_discrepancy_block(self, report):
-        aggregate = report["discrepancies"]["aggregate_rounding"]
-        assert aggregate["rows_with_tolerated_rounding"] == 5
-        assert round(abs(aggregate["gap"]), 2) == 0.05
+    def test_variance_breakdown_discrepancy_block(self, report):
+        breakdown = report["discrepancies"]["variance_breakdown"]
+        assert breakdown["rows_with_tolerated_rounding"] == 5
+        assert breakdown["total_variance"] == report["summary"]["total_variance"]
+    
+    def test_variance_includes_all_matched_ids(self, report):
+        """Variance should be calculated from ALL matched IDs (matched + cross-month + mismatches)."""
+        s = report["summary"]
+        expected_pairs = s["matched"] + s["cross_month"] + s["amount_mismatches"]
+        assert s["variance_pairs_count"] == expected_pairs, (
+            f"Variance pairs {s['variance_pairs_count']} != matched + cross_month + mismatches ({expected_pairs})"
+        )
+    
+    def test_bidirectional_mismatches(self, report):
+        """Mismatches should include both positive (SHORT) and negative (OVER) differences."""
+        mismatches = report["discrepancies"]["amount_mismatches"]
+        positive_diffs = [m for m in mismatches if m["difference"] > 0]
+        negative_diffs = [m for m in mismatches if m["difference"] < 0]
+        assert len(positive_diffs) > 0, "Expected some positive differences (SHORT)"
+        assert len(negative_diffs) > 0, "Expected some negative differences (OVER)"
 
 
 # ── Test 4: Duplicates Detected ──────────────────────────────────────
@@ -226,16 +243,45 @@ class TestReportStructure:
     def test_summary_has_all_keys(self, report):
         required = {
             "total_transactions", "total_settlements", "matched",
-            "cross_month", "amount_mismatches", "duplicates_in_transactions",
-            "orphan_refunds",
-            "row_mismatch_tolerance", "tolerated_rounding_rows", "aggregate_rounding_gap",
+            "cross_month", "amount_mismatches",
+            "duplicates_in_transactions", "duplicates_in_settlements",
+            "missing_settlements", "orphan_refunds",
+            "row_mismatch_tolerance", "tolerated_rounding_rows", "total_variance",
+            "variance_pairs_count", "variance_expected_amount", "variance_actual_amount",
         }
         assert required.issubset(set(report["summary"].keys()))
 
     def test_discrepancies_has_all_categories(self, report):
         required = {
             "cross_month", "amount_mismatches", "duplicates",
-            "orphan_refunds",
-            "aggregate_rounding",
+            "orphan_refunds", "missing_settlements",
+            "variance_breakdown",
         }
         assert required.issubset(set(report["discrepancies"].keys()))
+
+
+class TestDateParsing:
+    @pytest.mark.parametrize(
+        "raw_date",
+        [
+            "2025-03-15 14:30:00",
+            "2025-03-15",
+            "15-03-2025 14:30:00",
+            "15/03/2025",
+            "03/15/2025",
+            "2025/03/15",
+            "15 Mar 2025",
+            "2025-03-15T14:30:00",
+            "2025-03-15T14:30:00Z",
+        ],
+    )
+    def test_parse_date_supports_multiple_formats(self, raw_date):
+        from reconcile import parse_date
+
+        parsed = parse_date(raw_date)
+        assert parsed is not None, f"Expected parse_date to support '{raw_date}'"
+
+    def test_parse_date_returns_none_for_invalid(self):
+        from reconcile import parse_date
+
+        assert parse_date("not-a-date") is None
