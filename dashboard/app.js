@@ -7,7 +7,7 @@ const SAMPLE_TXN_URL = './data/transactions.csv';
 const SAMPLE_STL_URL = './data/bank_settlements.csv';
 const DEFAULT_ROW_MISMATCH_TOLERANCE = 0.02;
 const MIN_ROW_MISMATCH_TOLERANCE = 0;
-const MAX_ROW_MISMATCH_TOLERANCE = 1;
+const MAX_ROW_MISMATCH_TOLERANCE = 10;
 const RESULTS_STORAGE_KEY = 'reconciliation_results_v1';
 
 const REQUIRED_FIELDS = {
@@ -162,7 +162,7 @@ function clampTolerance(value) {
 }
 
 function updateToleranceHelpMessage() {
-    dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance.`;
+    dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance and excluded from mismatch and variance totals.`;
 }
 
 function applyToleranceSettingFromInput() {
@@ -970,6 +970,13 @@ dom.btnSample.addEventListener('click', async () => {
     }
 });
 function reconcile(transactions, settlements) {
+    console.group('%c[RECONCILE] Starting Reconciliation', 'color: #2196F3; font-weight: bold; font-size: 14px');
+    console.log('[RECONCILE] Input transactions count:', transactions.length);
+    console.log('[RECONCILE] Input settlements count:', settlements.length);
+    console.log('[RECONCILE] Row mismatch tolerance:', rowMismatchTolerance);
+    console.log('[RECONCILE] First 3 transactions:', JSON.parse(JSON.stringify(transactions.slice(0, 3))));
+    console.log('[RECONCILE] First 3 settlements:', JSON.parse(JSON.stringify(settlements.slice(0, 3))));
+
     const txnIdCount = {};
     transactions.forEach((transaction) => {
         txnIdCount[transaction.transaction_id] = (txnIdCount[transaction.transaction_id] || 0) + 1;
@@ -1029,22 +1036,31 @@ function reconcile(transactions, settlements) {
 
     const txnIds = new Set(Object.keys(txnMap));
     const stlIds = new Set(Object.keys(stlMap));
+    console.log('[RECONCILE] Unique txn IDs:', txnIds.size);
+    console.log('[RECONCILE] Unique stl IDs:', stlIds.size);
+    const commonIds = [...txnIds].filter(id => stlIds.has(id));
+    console.log('[RECONCILE] IDs found in BOTH datasets:', commonIds.length);
+
     const orphanRefunds = [];
     const missingSettlements = [];
     const matched = [];
     const crossMonth = [];
     const amountMismatches = [];
     
-    // Variance calculation: for ALL matched IDs (IDs found in both datasets)
+    // Variance calculation: only rows with significant differences (> tolerance)
     let varianceExpectedTotal = 0;
     let varianceActualTotal = 0;
     let variancePairsCount = 0;
+    let varianceExcludedWithinToleranceRows = 0;
     
     // Separate tracking for "clean matched" (same month, within tolerance)
     let cleanMatchedExpected = 0;
     let cleanMatchedActual = 0;
     let cleanMatchedCount = 0;
     let toleratedRoundingRows = 0;
+
+    // Debug: track every non-zero difference
+    const debugNonZeroDiffs = [];
 
     stlIds.forEach((transactionId) => {
         if (!txnIds.has(transactionId)) {
@@ -1083,6 +1099,21 @@ function reconcile(transactions, settlements) {
         const absDifference = Math.abs(signedDiff); // Absolute for tolerance check
         const isCrossMonth = transaction.transaction_date.slice(0, 7) !== settlement.settlement_date.slice(0, 7);
 
+        // DEBUG: Log every pair
+        if (signedDiff !== 0) {
+            debugNonZeroDiffs.push({
+                id: transactionId,
+                expected: expectedAmount,
+                actual: actualAmount,
+                diff: signedDiff,
+                absDiff: absDifference,
+                isCrossMonth,
+                withinTolerance: absDifference <= rowMismatchTolerance,
+                txnNetAmount_raw: transaction.net_amount,
+                stlAmount_raw: settlement.settlement_amount,
+            });
+        }
+
         const record = {
             transaction_id: transactionId,
             transaction_date: transaction.transaction_date,
@@ -1096,15 +1127,22 @@ function reconcile(transactions, settlements) {
             utr: settlement.utr,
         };
 
-        // Add to variance totals for ALL matched IDs
-        varianceExpectedTotal += expectedAmount;
-        varianceActualTotal += actualAmount;
-        variancePairsCount += 1;
+        // Include in variance only when difference is above tolerance
+        if (absDifference > rowMismatchTolerance) {
+            varianceExpectedTotal += expectedAmount;
+            varianceActualTotal += actualAmount;
+            variancePairsCount += 1;
+        } else {
+            varianceExcludedWithinToleranceRows += 1;
+        }
 
+        let category;
         if (isCrossMonth) {
             crossMonth.push(record);
+            category = 'CROSS_MONTH';
         } else if (absDifference > rowMismatchTolerance) {
             amountMismatches.push(record);
+            category = 'AMOUNT_MISMATCH';
         } else {
             matched.push(record);
             cleanMatchedExpected += expectedAmount;
@@ -1112,11 +1150,23 @@ function reconcile(transactions, settlements) {
             cleanMatchedCount += 1;
             if (absDifference > 0 && absDifference <= rowMismatchTolerance) {
                 toleratedRoundingRows += 1;
+                category = 'TOLERATED_ROUNDING';
+            } else {
+                category = 'CLEAN_MATCH';
             }
         }
+
+        // Log every single pair with its categorization
+        console.log(`[RECONCILE PAIR] ID=${transactionId} | expected=${expectedAmount} | actual=${actualAmount} | diff=${signedDiff} | absDiff=${absDifference} | category=${category}`);
     });
 
     // Round all totals
+    console.group('%c[RECONCILE] Pre-rounding Totals', 'color: #FF9800; font-weight: bold');
+    console.log('[RECONCILE] varianceExpectedTotal (raw sum):', varianceExpectedTotal);
+    console.log('[RECONCILE] varianceActualTotal (raw sum):', varianceActualTotal);
+    console.log('[RECONCILE] raw diff (expected - actual):', varianceExpectedTotal - varianceActualTotal);
+    console.groupEnd();
+
     varianceExpectedTotal = Math.round(varianceExpectedTotal * 100) / 100;
     varianceActualTotal = Math.round(varianceActualTotal * 100) / 100;
     const totalVariance = Math.round((varianceExpectedTotal - varianceActualTotal) * 100) / 100;
@@ -1124,6 +1174,31 @@ function reconcile(transactions, settlements) {
     cleanMatchedExpected = Math.round(cleanMatchedExpected * 100) / 100;
     cleanMatchedActual = Math.round(cleanMatchedActual * 100) / 100;
     const cleanMatchedVariance = Math.round((cleanMatchedExpected - cleanMatchedActual) * 100) / 100;
+
+    console.group('%c[RECONCILE] Final Summary', 'color: #4CAF50; font-weight: bold; font-size: 13px');
+    console.log('[RECONCILE] Rows in variance scope (> tolerance):', variancePairsCount);
+    console.log('[RECONCILE] Rows excluded by tolerance:', varianceExcludedWithinToleranceRows);
+    console.log('[RECONCILE] Clean matched:', cleanMatchedCount);
+    console.log('[RECONCILE] Cross-month:', crossMonth.length);
+    console.log('[RECONCILE] Amount mismatches:', amountMismatches.length);
+    console.log('[RECONCILE] Missing settlements:', missingSettlements.length);
+    console.log('[RECONCILE] Orphan refunds:', orphanRefunds.length);
+    console.log('[RECONCILE] Tolerated rounding rows:', toleratedRoundingRows);
+    console.log('[RECONCILE] Variance Expected Total:', varianceExpectedTotal);
+    console.log('[RECONCILE] Variance Actual Total:', varianceActualTotal);
+    console.log('[RECONCILE] Total Variance (expected - actual):', totalVariance);
+    console.log('[RECONCILE] Clean Matched Variance:', cleanMatchedVariance);
+    console.groupEnd();
+
+    if (debugNonZeroDiffs.length > 0) {
+        console.group('%c[RECONCILE] ALL Non-Zero Differences (' + debugNonZeroDiffs.length + ' rows)', 'color: #f44336; font-weight: bold; font-size: 13px');
+        console.table(debugNonZeroDiffs);
+        console.groupEnd();
+    } else {
+        console.log('%c[RECONCILE] No non-zero differences found across any matched pairs!', 'color: #4CAF50; font-weight: bold');
+    }
+
+    console.groupEnd(); // end of Starting Reconciliation group
 
     return {
         summary: {
@@ -1137,8 +1212,9 @@ function reconcile(transactions, settlements) {
             missing_settlements: missingSettlements.length,
             orphan_refunds: orphanRefunds.length,
             row_mismatch_tolerance: rowMismatchTolerance,
-            // Variance for ALL matched IDs
+            // Variance for rows with abs(difference) > row tolerance
             variance_pairs_count: variancePairsCount,
+            variance_excluded_within_tolerance_rows: varianceExcludedWithinToleranceRows,
             variance_expected_amount: varianceExpectedTotal,
             variance_actual_amount: varianceActualTotal,
             total_variance: totalVariance,
@@ -1156,7 +1232,9 @@ function reconcile(transactions, settlements) {
             orphan_refunds: orphanRefunds,
             missing_settlements: missingSettlements,
             variance_breakdown: {
-                total_matched_ids: variancePairsCount,
+                total_matched_ids: commonIds.length,
+                rows_included_in_variance: variancePairsCount,
+                rows_excluded_by_tolerance: varianceExcludedWithinToleranceRows,
                 expected_total: varianceExpectedTotal,
                 actual_total: varianceActualTotal,
                 total_variance: totalVariance,
@@ -1340,21 +1418,33 @@ function animateCount(elementId, target) {
 }
 
 function renderResults(report) {
+    console.group('%c[RENDER] renderResults() called', 'color: #9C27B0; font-weight: bold; font-size: 14px');
+
     animateCount('card-matched', report.summary.matched);
     animateCount('card-cross-month', report.summary.cross_month);
     animateCount('card-mismatch', report.summary.amount_mismatches);
     animateCount('card-duplicates', report.summary.duplicates_in_transactions + report.summary.duplicates_in_settlements);
     animateCount('card-orphans', report.summary.orphan_refunds + report.summary.missing_settlements);
 
-    // Reconciliation Variance (ALL Matched IDs - IDs that exist in both datasets)
+    // Reconciliation Variance (only rows with |difference| > tolerance)
     const expectedTotal = Number(report.summary.variance_expected_amount || 0);
     const actualTotal = Number(report.summary.variance_actual_amount || 0);
     const variance = Number(report.summary.total_variance || 0);
     const varianceSign = variance > 0 ? 'SHORT' : variance < 0 ? 'OVER' : 'BALANCED';
     const varianceClass = variance === 0 ? 'variance-balanced' : (variance > 0 ? 'variance-short' : 'variance-over');
     const matchedPairs = Number(report.summary.variance_pairs_count || 0);
+    const varianceExcludedByTolerance = Number(
+        report.summary.variance_excluded_within_tolerance_rows
+        ?? report.discrepancies?.variance_breakdown?.rows_excluded_by_tolerance
+        ?? 0
+    );
     const toleratedRows = Number(report.summary.tolerated_rounding_rows || 0);
     const rowTolerance = Number(report.discrepancies?.variance_breakdown?.row_tolerance ?? rowMismatchTolerance);
+
+    console.log('[RENDER] expectedTotal from summary:', expectedTotal);
+    console.log('[RENDER] actualTotal from summary:', actualTotal);
+    console.log('[RENDER] variance from summary:', variance, '→', varianceSign);
+    console.log('[RENDER] matchedPairs:', matchedPairs);
 
     // Amount mismatch totals - sum of signed differences and absolute differences
     const mismatchNetFromRows = Array.isArray(report.discrepancies?.amount_mismatches)
@@ -1367,37 +1457,86 @@ function renderResults(report) {
     const mismatchAbs = Math.round(mismatchAbsFromRows * 100) / 100;
     const mismatchCount = Number(report.summary.amount_mismatches || 0);
 
-    // Cross-month totals (for breakdown - these ARE included in variance now)
+    console.log('[RENDER] Amount mismatch count:', mismatchCount);
+    console.log('[RENDER] Mismatch net total:', mismatchNet);
+    console.log('[RENDER] Mismatch abs total:', mismatchAbs);
+
+    // Cross-month totals (shown for context; only out-of-tolerance rows enter variance)
     const crossMonthTotal = Array.isArray(report.discrepancies?.cross_month)
         ? report.discrepancies.cross_month.reduce((sum, row) => sum + Number(row.expected_amount || 0), 0)
         : 0;
     const crossMonthDiff = Array.isArray(report.discrepancies?.cross_month)
         ? report.discrepancies.cross_month.reduce((sum, row) => sum + Number(row.difference || 0), 0)
         : 0;
+
+    console.log('[RENDER] Cross-month rows:', (report.discrepancies?.cross_month || []).length);
+    console.log('[RENDER] Cross-month total expected:', crossMonthTotal);
+    console.log('[RENDER] Cross-month total diff:', crossMonthDiff);
     
     // Orphan totals (NOT in variance - IDs don't match)
     const orphanTotal = Array.isArray(report.discrepancies?.orphan_refunds)
         ? report.discrepancies.orphan_refunds.reduce((sum, row) => sum + Number(row.settlement_amount || 0), 0)
         : 0;
 
-    // Total absolute differences across all matched (to show magnitude of errors)
+    console.log('[RENDER] Orphan refunds total:', orphanTotal);
+
+    // Variance scope rows: matched IDs whose absolute difference exceeds tolerance
     const allMatchedRows = [
         ...(report.matched || []),
         ...(report.discrepancies?.cross_month || []),
         ...(report.discrepancies?.amount_mismatches || []),
     ];
-    const totalAbsDiff = Math.round(allMatchedRows.reduce((sum, row) => sum + Math.abs(Number(row.difference || 0)), 0) * 100) / 100;
+    const varianceRows = allMatchedRows.filter(
+        (row) => Math.abs(Number(row.difference || 0)) > rowTolerance
+    );
+    const totalAbsDiff = Math.round(varianceRows.reduce((sum, row) => sum + Math.abs(Number(row.difference || 0)), 0) * 100) / 100;
+
+    console.log('[RENDER] allMatchedRows count:', allMatchedRows.length, '(matched:', (report.matched || []).length, '+ crossMonth:', (report.discrepancies?.cross_month || []).length, '+ mismatches:', (report.discrepancies?.amount_mismatches || []).length, ')');
+    console.log('[RENDER] varianceRows count (|diff| > tolerance):', varianceRows.length);
+    console.log('[RENDER] totalAbsDiff:', totalAbsDiff);
+
+    // Calculate SHORT and OVER totals separately
+    let shortTotal = 0;
+    let overTotal = 0;
+    const shortRows = [];
+    const overRows = [];
+    varianceRows.forEach(row => {
+        const diff = Number(row.difference || 0);
+        if (diff > 0) {
+            shortTotal += diff;  // Expected > Actual = SHORT
+            shortRows.push({ id: row.transaction_id, diff, expected: row.expected_amount, actual: row.actual_amount });
+        }
+        else if (diff < 0) {
+            overTotal += Math.abs(diff);  // Expected < Actual = OVER
+            overRows.push({ id: row.transaction_id, diff, expected: row.expected_amount, actual: row.actual_amount });
+        }
+    });
+    shortTotal = Math.round(shortTotal * 100) / 100;
+    overTotal = Math.round(overTotal * 100) / 100;
+
+    console.group('%c[RENDER] SHORT/OVER Breakdown', 'color: #E91E63; font-weight: bold');
+    console.log('[RENDER] Short total (bank paid less):', shortTotal, '| Rows contributing:', shortRows.length);
+    if (shortRows.length > 0) console.table(shortRows);
+    console.log('[RENDER] Over total (bank paid more):', overTotal, '| Rows contributing:', overRows.length);
+    if (overRows.length > 0) console.table(overRows);
+    console.log('[RENDER] Net variance (short - over):', Math.round((shortTotal - overTotal) * 100) / 100);
+    console.groupEnd();
+    console.groupEnd(); // end renderResults group
 
     dom.aggregateRoundingNote.innerHTML = `
         <div class="variance-section">
             <div class="variance-header">
                 <strong>💰 RECONCILIATION VARIANCE</strong>
-                <span class="variance-scope">(All Matched IDs: transactions found in BOTH datasets)</span>
+                <span class="variance-scope">(Only rows where |difference| &gt; tolerance)</span>
             </div>
             <div class="variance-grid">
                 <div class="variance-row">
-                    <span class="variance-label">Matched ID Pairs:</span>
+                    <span class="variance-label">Rows in Variance Scope:</span>
                     <span class="variance-value"><strong>${matchedPairs}</strong> transactions</span>
+                </div>
+                <div class="variance-row">
+                    <span class="variance-label">Excluded by Tolerance:</span>
+                    <span class="variance-value">${varianceExcludedByTolerance} transactions</span>
                 </div>
                 <div class="variance-row">
                     <span class="variance-label">Expected Amount (Platform):</span>
@@ -1407,20 +1546,28 @@ function renderResults(report) {
                     <span class="variance-label">Actual Amount (Bank):</span>
                     <span class="variance-value">₹${formatAmount(actualTotal)}</span>
                 </div>
+                <div class="variance-row variance-short-over">
+                    <span class="variance-label">Short Amount <small>(bank paid less)</small>:</span>
+                    <span class="variance-value"><span class="diff-short">+₹${formatAmount(shortTotal)}</span></span>
+                </div>
+                <div class="variance-row variance-short-over">
+                    <span class="variance-label">Over Amount <small>(bank paid more)</small>:</span>
+                    <span class="variance-value"><span class="diff-over">−₹${formatAmount(overTotal)}</span></span>
+                </div>
                 <div class="variance-row variance-total ${varianceClass}">
-                    <span class="variance-label"><strong>NET VARIANCE:</strong></span>
-                    <span class="variance-value"><strong>${variance >= 0 ? '+' : ''}₹${formatAmount(variance)} ${varianceSign}</strong></span>
+                    <span class="variance-label"><strong>NET VARIANCE:</strong> <small>(Short − Over)</small></span>
+                    <span class="variance-value"><strong>${variance >= 0 ? '+' : '−'}₹${formatAmount(Math.abs(variance))} ${varianceSign}</strong></span>
                 </div>
                 <div class="variance-row">
                     <span class="variance-label">Total Absolute Differences:</span>
-                    <span class="variance-value">₹${formatAmount(totalAbsDiff)} <small>(sum of all |differences|)</small></span>
+                    <span class="variance-value">₹${formatAmount(totalAbsDiff)} <small>(sum of |differences| in variance scope)</small></span>
                 </div>
             </div>
             <div class="variance-details">
                 <span>Clean Matched: <strong>${report.summary.matched}</strong> txns</span>
                 <span>Cross-Month: <strong>${report.summary.cross_month}</strong> txns</span>
                 <span>Amount Mismatches: <strong>${mismatchCount}</strong> txns (net: ${mismatchNet >= 0 ? '+' : ''}₹${formatAmount(mismatchNet)})</span>
-                <span>Tolerated Rounding: <strong>${toleratedRows}</strong> rows (≤₹${formatAmount(rowTolerance)} each)</span>
+                <span>Tolerated Rounding: <strong>${toleratedRows}</strong> rows (≤₹${formatAmount(rowTolerance)} each, excluded from variance)</span>
             </div>
             <div class="diff-legend">
                 <span class="diff-legend-item"><span class="diff-short">+</span> = SHORT (bank paid less than expected)</span>
@@ -1542,7 +1689,7 @@ dom.rowToleranceInput.addEventListener('change', () => {
     const previousTolerance = rowMismatchTolerance;
     applyToleranceSettingFromInput();
     if (reconciliationReport && previousTolerance !== rowMismatchTolerance) {
-        dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance. Run reconciliation again to apply this new value.`;
+        dom.rowToleranceHelp.textContent = `Differences up to ₹${rowMismatchTolerance.toFixed(2)} are treated as rounding tolerance and excluded from mismatch and variance totals. Run reconciliation again to apply this new value.`;
     }
 });
 

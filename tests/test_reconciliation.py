@@ -142,7 +142,7 @@ class TestVarianceCalculation:
         assert count == 5, f"Expected 5 tolerated rounding rows, found {count}"
 
     def test_total_variance_exists(self, report):
-        """Total variance should be non-zero due to mismatches and rounding."""
+        """Total variance should be non-zero due to out-of-tolerance mismatches."""
         variance = report["summary"]["total_variance"]
         assert variance != 0, "Expected non-zero total variance"
 
@@ -151,12 +151,15 @@ class TestVarianceCalculation:
         assert breakdown["rows_with_tolerated_rounding"] == 5
         assert breakdown["total_variance"] == report["summary"]["total_variance"]
     
-    def test_variance_includes_all_matched_ids(self, report):
-        """Variance should be calculated from ALL matched IDs (matched + cross-month + mismatches)."""
+    def test_variance_includes_only_out_of_tolerance_rows(self, report):
+        """Variance should be calculated only from rows where abs(diff) > tolerance."""
         s = report["summary"]
-        expected_pairs = s["matched"] + s["cross_month"] + s["amount_mismatches"]
+        expected_pairs = s["amount_mismatches"]
         assert s["variance_pairs_count"] == expected_pairs, (
-            f"Variance pairs {s['variance_pairs_count']} != matched + cross_month + mismatches ({expected_pairs})"
+            f"Variance pairs {s['variance_pairs_count']} != amount_mismatches ({expected_pairs})"
+        )
+        assert s["variance_excluded_within_tolerance_rows"] == s["matched"] + s["cross_month"], (
+            "Expected rows excluded by tolerance to equal matched + cross-month rows"
         )
     
     def test_bidirectional_mismatches(self, report):
@@ -247,7 +250,8 @@ class TestReportStructure:
             "duplicates_in_transactions", "duplicates_in_settlements",
             "missing_settlements", "orphan_refunds",
             "row_mismatch_tolerance", "tolerated_rounding_rows", "total_variance",
-            "variance_pairs_count", "variance_expected_amount", "variance_actual_amount",
+            "variance_pairs_count", "variance_excluded_within_tolerance_rows",
+            "variance_expected_amount", "variance_actual_amount",
         }
         assert required.issubset(set(report["summary"].keys()))
 

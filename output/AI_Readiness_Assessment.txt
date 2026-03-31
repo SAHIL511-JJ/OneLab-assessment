@@ -1,0 +1,24 @@
+Onelab — AI Fitness Assessment 
+Time: 2 hours | Tools: Any AI I Right answer: There isn't one 
+ 
+The Problem 
+A payments company's books don't balance at month end. They know every transaction 
+their platform processed. They know what the bank says actually arrived. The two 
+should match. They don't. Find out why. Show them where the gaps are. 
+Test Data 
+No files provided. Generate your own — that's part of the assessment. A payments 
+platform records a transaction instantly when a customer pays. The bank batches and 
+settles funds 1–2 days later. At month end every transaction should have a matching 
+settlement. 
+Plant these gap types: a transaction that settled the following month · a rounding 
+difference that only shows when summed · a duplicate entry in one dataset · a refund 
+with no matching original transaction. 
+State your assumptions. There are no wrong ones as long as you name them. 
+What to Submit 
+1 Brainstorming thread   Full LLM convo. Do not clean it up. 
+2 Distilled prompt   The single prompt you fed into Claude Code or Cursor or any other 
+AI coding tool. 
+3 Claude Code thread   Full execution thread including wrong turns. 
+4 Test cases   What you wrote to verify your solution works. 
+5 Working output   Deployed link + code zip + Demo video + 3 sentences on what it 
+would get wrong in production. 

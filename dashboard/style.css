@@ -585,6 +585,13 @@ body::before {
     font-size: var(--font-size-sm);
 }
 
+.setting-warning {
+    margin-top: var(--space-2);
+    color: var(--accent-yellow);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+}
+
 .upload-actions {
     display: flex;
     gap: var(--space-4);

@@ -151,10 +151,11 @@ def reconcile():
     amount_mismatches = []
     matched = []
     
-    # Variance calculation: for ALL matched IDs (IDs found in both datasets)
+    # Variance calculation: ONLY rows with significant differences (> tolerance)
     variance_expected_total = 0.0
     variance_actual_total = 0.0
     variance_pairs_count = 0
+    variance_excluded_within_tolerance_rows = 0
     
     # Separate tracking for "clean matched" (same month, within tolerance)
     clean_matched_expected = 0.0
@@ -199,10 +200,13 @@ def reconcile():
             "utr": stl["utr"],
         }
 
-        # Add to variance totals for ALL matched IDs
-        variance_expected_total += txn_net
-        variance_actual_total += stl_amt
-        variance_pairs_count += 1
+        # Include in variance only when difference is above tolerance
+        if has_mismatch:
+            variance_expected_total += txn_net
+            variance_actual_total += stl_amt
+            variance_pairs_count += 1
+        else:
+            variance_excluded_within_tolerance_rows += 1
 
         if is_cross_month:
             cross_month.append(record)
@@ -276,8 +280,9 @@ def reconcile():
             "missing_settlements": len(missing_settlements),
             "orphan_refunds": len(orphan_refunds),
             "row_mismatch_tolerance": ROW_MISMATCH_TOLERANCE,
-            # Variance for ALL matched IDs
+            # Variance for rows with abs(difference) > row tolerance
             "variance_pairs_count": variance_pairs_count,
+            "variance_excluded_within_tolerance_rows": variance_excluded_within_tolerance_rows,
             "variance_expected_amount": variance_expected_total,
             "variance_actual_amount": variance_actual_total,
             "total_variance": total_variance,
@@ -295,7 +300,9 @@ def reconcile():
             "orphan_refunds": orphan_refunds,
             "missing_settlements": missing_settlements,
             "variance_breakdown": {
-                "total_matched_ids": variance_pairs_count,
+                "total_matched_ids": len(matched_ids),
+                "rows_included_in_variance": variance_pairs_count,
+                "rows_excluded_by_tolerance": variance_excluded_within_tolerance_rows,
                 "expected_total": variance_expected_total,
                 "actual_total": variance_actual_total,
                 "total_variance": total_variance,
@@ -320,31 +327,32 @@ def reconcile():
     print(f"  Settlements loaded    : {s['total_settlements']} ({s['unique_settlement_ids']} unique)")
     print("=" * 70)
     print()
-    print("  💰 RECONCILIATION VARIANCE (Matched IDs Only)")
+    print("  RECONCILIATION VARIANCE (Rows with |difference| > tolerance)")
     print("  " + "-" * 66)
-    print(f"  Matched ID Pairs      : {s['variance_pairs_count']} transactions")
-    print(f"  Expected Amount       : ₹{s['variance_expected_amount']:,.2f}")
-    print(f"  Actual Amount (Bank)  : ₹{s['variance_actual_amount']:,.2f}")
-    print(f"  {'─' * 66}")
+    print(f"  Rows in Variance Scope: {s['variance_pairs_count']} transactions")
+    print(f"  Excluded by Tolerance : {s['variance_excluded_within_tolerance_rows']} transactions")
+    print(f"  Expected Amount       : Rs.{s['variance_expected_amount']:,.2f}")
+    print(f"  Actual Amount (Bank)  : Rs.{s['variance_actual_amount']:,.2f}")
+    print(f"  {'-' * 66}")
     variance_sign = "SHORT" if s['total_variance'] > 0 else "OVER" if s['total_variance'] < 0 else "BALANCED"
-    print(f"  TOTAL VARIANCE        : ₹{abs(s['total_variance']):.2f} {variance_sign}")
+    print(f"  TOTAL VARIANCE        : Rs.{abs(s['total_variance']):.2f} {variance_sign}")
     print()
-    print("  📊 TRANSACTION BREAKDOWN (All Matched IDs)")
+    print("  TRANSACTION BREAKDOWN (All Matched IDs)")
     print("  " + "-" * 66)
-    print(f"  ✅ Clean Matched (same month, ≤tolerance) : {s['matched']}")
-    print(f"  📅 Cross-Month                            : {s['cross_month']}")
-    print(f"  💰 Amount Mismatches (>tolerance)         : {s['amount_mismatches']}")
-    print(f"  🔢 Tolerated Rounding Rows                : {s['tolerated_rounding_rows']} (≤₹{s['row_mismatch_tolerance']:.2f} each)")
+    print(f"  Clean Matched (same month, <= tolerance) : {s['matched']}")
+    print(f"  Cross-Month                              : {s['cross_month']}")
+    print(f"  Amount Mismatches (> tolerance)          : {s['amount_mismatches']}")
+    print(f"  Tolerated Rounding Rows                  : {s['tolerated_rounding_rows']} (<= Rs.{s['row_mismatch_tolerance']:.2f} each)")
     print()
-    print("  ⚠️  DATA QUALITY ISSUES (IDs not matched - excluded from variance)")
+    print("  DATA QUALITY ISSUES (IDs not matched - excluded from variance)")
     print("  " + "-" * 66)
-    print(f"  📋 Duplicate Transactions     : {s['duplicates_in_transactions']}")
-    print(f"  📋 Duplicate Settlements      : {s['duplicates_in_settlements']}")
-    print(f"  ❌ Missing Settlements        : {s['missing_settlements']}")
-    print(f"  🔄 Orphan Refunds             : {s['orphan_refunds']}")
+    print(f"  Duplicate Transactions     : {s['duplicates_in_transactions']}")
+    print(f"  Duplicate Settlements      : {s['duplicates_in_settlements']}")
+    print(f"  Missing Settlements        : {s['missing_settlements']}")
+    print(f"  Orphan Refunds             : {s['orphan_refunds']}")
     print()
     print("=" * 70)
-    print(f"  📄 Full report saved to: {REPORT_FILE}")
+    print(f"  Full report saved to: {REPORT_FILE}")
     print("=" * 70)
 
 

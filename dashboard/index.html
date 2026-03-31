@@ -48,7 +48,7 @@
                 <div class="quick-guide-step"><strong>1. Load files:</strong> upload both CSVs or click <code>Use Sample Data</code>.</div>
                 <div class="quick-guide-step"><strong>2. Map fields:</strong> confirm the required columns and click <code>Apply Mapping</code>.</div>
                 <div class="quick-guide-step"><strong>3. Set tolerance + run:</strong> adjust <code>Advanced Settings</code> if needed, then click <code>Run Reconciliation</code>.</div>
-                <div class="quick-guide-step"><strong>4. Review results:</strong> use tabs and note that tiny rounding drift can show up only in totals.</div>
+                <div class="quick-guide-step"><strong>4. Review results:</strong> use tabs and note that rows within tolerance are excluded from mismatch and variance totals.</div>
             </div>
         </section>
 
@@ -175,14 +175,15 @@
                             id="row-tolerance-input"
                             type="number"
                             min="0"
-                            max="1"
+                            max="10"
                             step="0.01"
                             value="0.02"
                         >
                     </label>
                     <p id="row-tolerance-help" class="setting-help">
-                        Differences up to this value are treated as rounding tolerance.
+                        Differences up to this value are treated as rounding tolerance and excluded from mismatch and variance totals.
                     </p>
+                    <p class="setting-warning">⚠️ Higher tolerance values can make reconciliation results unreliable. Use with caution.</p>
                 </div>
             </section>
 
@@ -301,7 +302,7 @@
 
                 <div class="tab-panel" id="panel-mismatch">
                     <div class="panel-description">
-                        <p>Rows where expected and actual amounts differ by more than the configured row tolerance. Tiny rounding differences within tolerance are tracked in aggregate totals.</p>
+                        <p>Rows where expected and actual amounts differ by more than the configured row tolerance. Differences within tolerance are excluded from both mismatch and variance totals.</p>
                     </div>
                     <div class="table-wrapper">
                         <table id="table-mismatch">

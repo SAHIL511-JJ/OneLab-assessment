@@ -70,7 +70,7 @@ python -m http.server 8080
 
 | Feature | How to Test |
 |---------|-------------|
-| **Variance Calculation** | Check the "RECONCILIATION VARIANCE" section shows Expected, Actual, and Net Variance amounts |
+| **Variance Calculation** | Check the "RECONCILIATION VARIANCE" section shows Expected, Actual, and Net Variance for rows above tolerance |
 | **Signed Differences** | In the "All Transactions" table, differences show `+` (red, SHORT) or `−` (green, OVER) |
 | **Search** | Type in the search box to filter by Transaction ID, Order ID, Merchant, Payment Method, UTR, or Status |
 | **Tab Navigation** | Click tabs: All Transactions, Cross-Month, Mismatches, Duplicates, Orphans |
@@ -83,13 +83,14 @@ python -m http.server 8080
 | Metric | Expected Value |
 |--------|----------------|
 | Total Transactions | 318 (316 unique) |
-| Matched ID Pairs | 316 |
+| Matched ID Pairs (ID overlap) | 316 |
+| Rows in Variance Scope (>|tolerance|) | 8 |
 | Cross-Month | 15 (includes 3 planted) |
 | Amount Mismatches | 8 |
 | Duplicates | 2 |
 | Orphan Refunds | 2 |
 | Tolerated Rounding | 5 rows |
-| Net Variance | ~₹7.95 OVER |
+| Net Variance | ~₹8.00 OVER |
 
 ---
 
@@ -121,7 +122,7 @@ OneLab-assessment/
 | # | Gap Type | Count | Description |
 |---|----------|-------|-------------|
 | 1 | **Cross-month settlement** | 3 | Transactions on March 30-31, settled in April 1-3 |
-| 2 | **Rounding difference (aggregate)** | 5 rows | Tiny ₹0.01 drift per row is tolerated; gap appears when totals are summed |
+| 2 | **Rounding difference (within tolerance)** | 5 rows | Tiny ₹0.01 drift per row is tolerated and excluded from mismatch/variance totals |
 | 3 | **Duplicate entry** | 2 | Same transaction appearing twice in platform data |
 | 4 | **Orphan refund** | 2 | Bank refunds referencing non-existent transactions |
 | 5 | **Amount mismatches (bidirectional)** | 8 | Larger differences (₹2-7) with both SHORT and OVER directions |
@@ -145,8 +146,8 @@ OneLab-assessment/
 
 **Variance** = Total Expected Amount − Total Actual Amount
 
-- **Included in variance**: All transactions where the ID exists in BOTH datasets (matched, cross-month, amount mismatches)
-- **Excluded from variance**: Orphan refunds, missing settlements, duplicates (IDs don't match)
+- **Included in variance**: Only matched-ID rows where `|expected - actual| > row_tolerance`
+- **Excluded from variance**: Rows within tolerance, orphan refunds, missing settlements, duplicates (IDs don't match)
 
 | Sign | Meaning | Color |
 |------|---------|-------|
