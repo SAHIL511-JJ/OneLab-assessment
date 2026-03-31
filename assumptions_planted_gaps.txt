@@ -1,0 +1,7 @@
+Assumptions Made for Planted Gap Types
+
+1. A transaction should settle in the same reconciliation window (same day/week/month), so next-month settlements look missing.
+2. Tolerance is applied per row, so tiny differences are treated as noise unless you also check aggregate variance.
+3. Each reference ID is unique in each dataset, so duplicates are treated as data errors or can distort totals.
+4. Every refund should have a directly matchable original transaction in the same dataset/window.
+5. Reconciliation is mostly one-to-one (one transaction to one settlement), not many-to-one or split/partial flows.

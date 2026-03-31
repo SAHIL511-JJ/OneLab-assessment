@@ -1,0 +1,3 @@
+In production, it may wrongly flag or miss matches when reference IDs are inconsistent, duplicated, or reused across systems.
+It can also misstate variance if real-world cases like fees, taxes, chargebacks, reversals, or partial settlements are treated as simple one-to-one payments.
+And if file formats or posting timelines change, weak validation (dates/timezones, schema drift, delayed entries) can create false exceptions while hiding real issues.

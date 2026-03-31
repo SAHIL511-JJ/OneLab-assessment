@@ -74,7 +74,7 @@ const dom = {
 };
 
 function normalizeHeaderName(value) {
-    return String(value || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    return String(value || '').toLowerCase().trim().replaceAll(/[^a-z0-9]/g, '');
 }
 
 function normalizeCell(value) {
@@ -83,11 +83,11 @@ function normalizeCell(value) {
 
 function escapeHtml(value) {
     return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+        .replaceAll(/&/g, '&amp;')
+        .replaceAll(/</g, '&lt;')
+        .replaceAll(/>/g, '&gt;')
+        .replaceAll(/\"/g, '&quot;')
+        .replaceAll(/'/g, '&#39;');
 }
 
 function zeroPad(value) {
@@ -221,7 +221,7 @@ function getFieldConfig(dataset, key) {
 }
 
 function getSelectElement(dataset, key) {
-    return document.getElementById(`map-${dataset}-${key.replace(/_/g, '-')}`);
+    return document.getElementById(`map-${dataset}-${key.replaceAll(/_/g, '-')}`);
 }
 
 function updateReadyState() {
@@ -449,11 +449,11 @@ function parseAmountValue(value) {
     }
 
     let cleaned = raw
-        .replace(/,/g, '')
-        .replace(/\s+/g, '')
-        .replace(/inr/ig, '')
-        .replace(/rs\.?/ig, '')
-        .replace(/[\$\u20b9\u00a3\u20ac]/g, '');
+        .replaceAll(/,/g, '')
+        .replaceAll(/\s+/g, '')
+        .replaceAll(/inr/ig, '')
+        .replaceAll(/rs\.?/ig, '')
+        .replaceAll(/[\$\u20b9\u00a3\u20ac]/g, '');
 
     let negative = false;
     if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
@@ -514,7 +514,7 @@ function parseDateValue(value, includeTime) {
         return { error: 'is blank' };
     }
 
-    const cleaned = raw.replace(/\s+/g, ' ').trim();
+    const cleaned = raw.replaceAll(/\s+/g, ' ').trim();
     let match = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
     if (match) {
         return buildCanonicalDate({
